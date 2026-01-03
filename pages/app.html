@@ -18,6 +18,8 @@
   <body>
     <h1>Shadowwork（会員ページ）</h1>
 
+    <div id="debug-state"></div>
+
     <div>
       <textarea id="msg" rows="4" cols="50" placeholder="ここに入力"></textarea><br />
       <button id="send">送信</button>
@@ -51,6 +53,11 @@
           };
 
           console.log("[state]", window.__STATE__);
+
+          const $debug = document.getElementById("debug-state");
+          $debug.textContent =
+            `STEP: ${window.__STATE__.session.current_step} / ` +
+            `INDEX: ${window.__STATE__.session.current_index}`;
         } catch (err) {
           console.error("[session/state] fetch error", err);
         }
