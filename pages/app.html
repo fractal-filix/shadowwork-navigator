@@ -28,55 +28,61 @@
     <pre id="log"></pre>
 
     <script>
-      const API_URL = "https://filix-stripe-webhook.xxxhideyoxxx.workers.dev/api/shadowwork";
+      const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
 
       const $log = document.getElementById("log");
       const $msg = document.getElementById("msg");
 
-      // === 起動時：session/state 疎通確認 ===
+      const USER_ID = "test";
+
+      // === 起動時：thread/state 疎通確認 ===
       document.addEventListener("DOMContentLoaded", async () => {
         try {
           const res = await fetch(
-            "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev/api/session/state?user_id=test",
-            {
-              method: "GET",
-              credentials: "include", // cookieベース想定の場合
-            }
+            `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
+            { method: "GET" }
           );
 
           const json = await res.json();
-          console.log("[session/state]", json);
+          console.log("[thread/state]", json);
 
           window.__STATE__ = {
-            session: json.session ?? null,
-            lastEntry: json.last_entry ?? null,
+            thread: json.thread ?? null,
+            lastMessage: json.last_message ?? null,
           };
 
-          console.log("[state]", window.__STATE__);
-
           const $debug = document.getElementById("debug-state");
+
+          if (!window.__STATE__.thread) {
+            $debug.textContent = "thread: null (start を叩いて作成してね)";
+            return;
+          }
+
+          const t = window.__STATE__.thread;
+
           $debug.textContent =
-            `STEP: ${window.__STATE__.session.current_step} / ` +
-            `INDEX: ${window.__STATE__.session.current_index}`;
+            `STEP: ${t.current_step} / ` +
+            `Q: ${t.current_question_no} / ` +
+            `S: ${t.current_session_no}`;
         } catch (err) {
-          console.error("[session/state] fetch error", err);
+          console.error("[thread/state] fetch error", err);
         }
       });
 
       document.getElementById("send").addEventListener("click", async () => {
-        const message = $msg.value.trim();
-        if (!message) return;
+        const answer = $msg.value.trim();
+        if (!answer) return;
 
-        $log.textContent += `\n\nYou: ${message}`;
+        $log.textContent += `\n\nYou: ${answer}`;
 
-        const res = await fetch(API_URL, {
+        const res = await fetch(`${API_BASE}/api/thread/answer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ user_id: USER_ID, answer }),
         });
 
         const data = await res.json().catch(() => ({}));
-        $log.textContent += `\n\nAI: ${data.reply ?? "(no reply)"}`;
+        $log.textContent += `\n\n[thread/answer] ${JSON.stringify(data)}`;
         $msg.value = "";
       });
     </script>
