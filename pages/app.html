@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadowwork (Members)</title>
+
+    <!-- Memberstack Install Code（あなたの実際のコードに差し替え） -->
+    <script src="https://static.memberstack.com/scripts/v1/memberstack.js"></script>
+    <script>
+      window.memberstack = window.memberstack || [];
+      window.memberstack.push(["init", { publicKey: "pk_f4cf79925f5ae28222fa" }]);
+    </script>
+  </head>
+
+  <body>
+    <h1>Shadowwork（会員ページ）</h1>
+
+    <div>
+      <textarea id="msg" rows="4" cols="50" placeholder="ここに入力"></textarea><br />
+      <button id="send">送信</button>
+    </div>
+
+    <pre id="log"></pre>
+
+    <script>
+      const API_URL = "https://filix-stripe-webhook.xxxhideyoxxx.workers.dev/api/shadowwork";
+
+      const $log = document.getElementById("log");
+      const $msg = document.getElementById("msg");
+
+      document.getElementById("send").addEventListener("click", async () => {
+        const message = $msg.value.trim();
+        if (!message) return;
+
+        $log.textContent += `\n\nYou: ${message}`;
+
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        $log.textContent += `\n\nAI: ${data.reply ?? "(no reply)"}`;
+        $msg.value = "";
+      });
+    </script>
+  </body>
+</html>
