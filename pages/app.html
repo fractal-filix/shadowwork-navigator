@@ -28,6 +28,24 @@
       const $log = document.getElementById("log");
       const $msg = document.getElementById("msg");
 
+      // === 起動時：session/state 疎通確認 ===
+      document.addEventListener("DOMContentLoaded", async () => {
+        try {
+          const res = await fetch(
+            "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev/api/session/state",
+            {
+              method: "GET",
+              credentials: "include", // cookieベース想定の場合
+            }
+          );
+
+          const json = await res.json();
+          console.log("[session/state]", json);
+        } catch (err) {
+          console.error("[session/state] fetch error", err);
+        }
+      });
+
       document.getElementById("send").addEventListener("click", async () => {
         const message = $msg.value.trim();
         if (!message) return;
