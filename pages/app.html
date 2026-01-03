@@ -32,7 +32,7 @@
       document.addEventListener("DOMContentLoaded", async () => {
         try {
           const res = await fetch(
-            "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev/api/session/state",
+            "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev/api/session/state?user_id=test",
             {
               method: "GET",
               credentials: "include", // cookieベース想定の場合
