@@ -44,6 +44,13 @@
 
           const json = await res.json();
           console.log("[session/state]", json);
+
+          window.__STATE__ = {
+            session: json.session ?? null,
+            lastEntry: json.last_entry ?? null,
+          };
+
+          console.log("[state]", window.__STATE__);
         } catch (err) {
           console.error("[session/state] fetch error", err);
         }
