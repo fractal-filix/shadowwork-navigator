@@ -3,16 +3,6 @@
   <head>
     <meta charset="utf-8" />
     <title>Shadowwork (Members)</title>
-
-    <!-- Memberstack Install Code（あなたの実際のコードに差し替え） -->
-    <!-- Memberstack は後で統合する（いったん疎通確認を優先） -->
-    <!--
-    <script src="https://static.memberstack.com/scripts/v1/memberstack.js"></script>
-    <script>
-      window.memberstack = window.memberstack || [];
-      window.memberstack.push(["init", { publicKey: "pk_f4cf79925f5ae28222fa" }]);
-    </script>
-    -->
   </head>
 
   <body>
@@ -29,61 +19,105 @@
 
     <script>
       const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+      const USER_ID = "test";
 
       const $log = document.getElementById("log");
       const $msg = document.getElementById("msg");
+      const $debug = document.getElementById("debug-state");
+      const $send = document.getElementById("send");
 
-      const USER_ID = "test";
+      function renderDebug() {
+        const t = window.__STATE__?.thread;
+        if (!t) {
+          $debug.textContent = "thread: null";
+          return;
+        }
+        $debug.textContent =
+          `STEP: ${t.current_step} / ` +
+          `Q: ${t.current_question_no} / ` +
+          `S: ${t.current_session_no}`;
+      }
 
-      // === 起動時：thread/state 疎通確認 ===
+      async function fetchState() {
+        const res = await fetch(
+          `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
+          { method: "GET" }
+        );
+        const json = await res.json();
+        console.log("[thread/state]", json);
+
+        window.__STATE__ = {
+          thread: json.thread ?? null,
+          lastMessage: json.last_message ?? null,
+        };
+        renderDebug();
+        return window.__STATE__;
+      }
+
+      async function ensureThread() {
+        const state = await fetchState();
+        if (state.thread) return state.thread;
+
+        // なければ作る
+        const res = await fetch(
+          `${API_BASE}/api/thread/start?user_id=${encodeURIComponent(USER_ID)}`,
+          { method: "POST" }
+        );
+        const json = await res.json();
+        console.log("[thread/start]", json);
+
+        // start 後に state 再取得
+        await fetchState();
+        return window.__STATE__.thread;
+      }
+
+      // === 起動時 ===
       document.addEventListener("DOMContentLoaded", async () => {
         try {
-          const res = await fetch(
-            `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-            { method: "GET" }
-          );
-
-          const json = await res.json();
-          console.log("[thread/state]", json);
-
-          window.__STATE__ = {
-            thread: json.thread ?? null,
-            lastMessage: json.last_message ?? null,
-          };
-
-          const $debug = document.getElementById("debug-state");
-
-          if (!window.__STATE__.thread) {
-            $debug.textContent = "thread: null (start を叩いて作成してね)";
-            return;
-          }
-
-          const t = window.__STATE__.thread;
-
-          $debug.textContent =
-            `STEP: ${t.current_step} / ` +
-            `Q: ${t.current_question_no} / ` +
-            `S: ${t.current_session_no}`;
+          await ensureThread();
         } catch (err) {
-          console.error("[thread/state] fetch error", err);
+          console.error("[init] error", err);
+          $debug.textContent = "init error (console見て)";
         }
       });
 
-      document.getElementById("send").addEventListener("click", async () => {
+      // === 送信 ===
+      $send.addEventListener("click", async () => {
         const answer = $msg.value.trim();
         if (!answer) return;
 
-        $log.textContent += `\n\nYou: ${answer}`;
+        $send.disabled = true;
 
-        const res = await fetch(`${API_BASE}/api/thread/answer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: USER_ID, answer }),
-        });
+        try {
+          $log.textContent += `\n\nYou: ${answer}`;
 
-        const data = await res.json().catch(() => ({}));
-        $log.textContent += `\n\n[thread/answer] ${JSON.stringify(data)}`;
-        $msg.value = "";
+          const res = await fetch(`${API_BASE}/api/thread/answer`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: USER_ID, answer }),
+          });
+
+          const data = await res.json().catch(() => ({}));
+          console.log("[thread/answer]", data);
+          $log.textContent += `\n\n[thread/answer] ${JSON.stringify(data)}`;
+
+          // レスポンスを state に反映（最小）
+          if (window.__STATE__?.thread) {
+            window.__STATE__.thread.current_step = data.current_step ?? window.__STATE__.thread.current_step;
+            window.__STATE__.thread.current_question_no =
+              data.current_question_no ?? window.__STATE__.thread.current_question_no;
+            window.__STATE__.thread.current_session_no =
+              data.current_session_no ?? window.__STATE__.thread.current_session_no;
+            renderDebug();
+          }
+
+          $msg.value = "";
+        } catch (err) {
+          console.error("[thread/answer] error", err);
+          $log.textContent += `\n\n[error] ${String(err)}`;
+        } finally {
+          $send.disabled = false;
+        }
       });
     </script>
   </body>
