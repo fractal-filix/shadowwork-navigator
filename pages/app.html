@@ -101,6 +101,14 @@
           console.log("[thread/answer]", data);
           $log.textContent += `\n\n[thread/answer] ${JSON.stringify(data)}`;
 
+          if (!res.ok || !data.ok) {
+            appendLine(`[ERROR] ${JSON.stringify(data)}`);
+            return;
+          }
+
+          // AIの返答を会話形式で表示
+          appendLine(`AI: ${data.reply ?? "(no reply)"}`);
+
           // レスポンスを state に反映（最小）
           if (window.__STATE__?.thread) {
             window.__STATE__.thread.current_step = data.current_step ?? window.__STATE__.thread.current_step;
@@ -115,6 +123,7 @@
         } catch (err) {
           console.error("[thread/answer] error", err);
           $log.textContent += `\n\n[error] ${String(err)}`;
+          appendLine(`[error] ${String(err)}`);
         } finally {
           $send.disabled = false;
         }
