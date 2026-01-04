@@ -20,6 +20,7 @@
     <script>
       const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
       const USER_ID = "test";
+      const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
       const $log = document.getElementById("log");
       const $msg = document.getElementById("msg");
@@ -104,7 +105,9 @@
 
           const data = await res.json().catch(() => ({}));
           console.log("[thread/answer]", data);
-          $log.textContent += `\n\n[thread/answer] ${JSON.stringify(data)}`;
+          if (DEBUG_UI) {
+            appendLine(`[thread/answer] ${JSON.stringify(data)}`);
+          }
 
           if (!res.ok || !data.ok) {
             appendLine(`[ERROR] ${JSON.stringify(data)}`);
