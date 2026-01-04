@@ -26,6 +26,11 @@
       const $debug = document.getElementById("debug-state");
       const $send = document.getElementById("send");
 
+      function appendLine(text) {
+        if ($log.textContent) $log.textContent += `\n\n`;
+        $log.textContent += text;
+      }
+
       function renderDebug() {
         const t = window.__STATE__?.thread;
         if (!t) {
@@ -89,7 +94,7 @@
         $send.disabled = true;
 
         try {
-          $log.textContent += `\n\nYou: ${answer}`;
+          appendLine(`You: ${answer}`);
 
           const res = await fetch(`${API_BASE}/api/thread/answer`, {
             method: "POST",
