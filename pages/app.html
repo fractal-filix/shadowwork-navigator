@@ -100,7 +100,9 @@
           const res = await fetch(`${API_BASE}/api/thread/message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: USER_ID, content: message }),
+            body: JSON.stringify({
+              user_id: USER_ID,
+              message }),
           });
 
           const data = await res.json().catch(() => ({}));
