@@ -89,24 +89,24 @@
 
       // === 送信 ===
       $send.addEventListener("click", async () => {
-        const answer = $msg.value.trim();
-        if (!answer) return;
+        const message = $msg.value.trim();
+        if (!message) return;
 
         $send.disabled = true;
 
         try {
-          appendLine(`You: ${answer}`);
+          appendLine(`You: ${message}`);
 
-          const res = await fetch(`${API_BASE}/api/thread/answer`, {
+          const res = await fetch(`${API_BASE}/api/thread/message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: USER_ID, answer }),
+            body: JSON.stringify({ user_id: USER_ID, content: message }),
           });
 
           const data = await res.json().catch(() => ({}));
-          console.log("[thread/answer]", data);
+          console.log("[thread/message]", data);
           if (DEBUG_UI) {
-            appendLine(`[thread/answer] ${JSON.stringify(data)}`);
+            appendLine(`[thread/message] ${JSON.stringify(data)}`);
           }
 
           if (!res.ok || !data.ok) {
@@ -129,7 +129,7 @@
 
           $msg.value = "";
         } catch (err) {
-          console.error("[thread/answer] error", err);
+          console.error("[thread/message] error", err);
           $log.textContent += `\n\n[error] ${String(err)}`;
           appendLine(`[error] ${String(err)}`);
         } finally {
