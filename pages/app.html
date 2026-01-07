@@ -32,6 +32,10 @@
         $log.textContent += text;
       }
 
+      function clearLog() {
+        $log.textContent = "";
+      }
+
       function renderDebug() {
         const t = window.__STATE__?.thread;
         if (!t) {
@@ -39,9 +43,9 @@
           return;
         }
         $debug.textContent =
-          `STEP: ${t.current_step} / ` +
-          `Q: ${t.current_question_no} / ` +
-          `S: ${t.current_session_no}`;
+          `STEP: ${t.step} / ` +
+          `Q: ${t.question_no ?? "-"} / ` +
+          `S: ${t.session_no ?? "-"}`;
       }
 
       async function fetchState() {
@@ -77,6 +81,29 @@
         return window.__STATE__.thread;
       }
 
+      async function closeThread() {
+        const res = await fetch(`${API_BASE}/api/thread/close`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: USER_ID }),
+        });
+        const json = await res.json().catch(() => ({}));
+        console.log("[thread/close]", json);
+        if (!res.ok || !json.ok) {
+          appendLine(`[ERROR] thread/close ${JSON.stringify(json)}`);
+          return false;
+        }
+        return true;
+      }
+
+      function shouldCloseFromResponse(data) {
+        // まずは約束のキー
+        if (data?.close_thread === true) return true;
+        // 保険：サーバ側が thread.status を completed にして返してくるパターン
+        if (data?.thread?.status === "completed") return true;
+        return false;
+      }
+
       // === 起動時 ===
       document.addEventListener("DOMContentLoaded", async () => {
         try {
@@ -100,9 +127,7 @@
           const res = await fetch(`${API_BASE}/api/thread/message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              user_id: USER_ID,
-              message }),
+            body: JSON.stringify({ user_id: USER_ID, message }),
           });
 
           const data = await res.json().catch(() => ({}));
@@ -119,14 +144,24 @@
           // AIの返答を会話形式で表示
           appendLine(`AI: ${data.reply ?? "(no reply)"}`);
 
-          // レスポンスを state に反映（最小）
-          if (window.__STATE__?.thread) {
-            window.__STATE__.thread.current_step = data.current_step ?? window.__STATE__.thread.current_step;
-            window.__STATE__.thread.current_question_no =
-              data.current_question_no ?? window.__STATE__.thread.current_question_no;
-            window.__STATE__.thread.current_session_no =
-              data.current_session_no ?? window.__STATE__.thread.current_session_no;
+          if (!window.__STATE__) window.__STATE__ = {};
+          if (data.thread) {
+            window.__STATE__ = window.__STATE__ ?? {};
+            window.__STATE__.thread = data.thread;
             renderDebug();
+          }
+
+          // close_thread なら thread を閉じて次スレッドへ
+          if (shouldCloseFromResponse(data)) {
+            appendLine("---- このスレッドを終了します ----");
+            const ok = await closeThread();
+            if (ok) {
+              // 1thread=1page なので、ログをクリアして新スレッドに切り替え
+              clearLog();
+              await ensureThread();
+              appendLine("（新しいスレッドを開始しました）");
+              renderDebug();
+            }
           }
 
           $msg.value = "";
