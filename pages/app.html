@@ -13,6 +13,7 @@
     <div>
       <textarea id="msg" rows="4" cols="50" placeholder="ここに入力"></textarea><br />
       <button id="send">送信</button>
+      <button id="next">次へ</button>
     </div>
 
     <pre id="log"></pre>
@@ -26,6 +27,7 @@
       const $msg = document.getElementById("msg");
       const $debug = document.getElementById("debug-state");
       const $send = document.getElementById("send");
+      const $next = document.getElementById("next");
 
       function appendLine(text) {
         if ($log.textContent) $log.textContent += `\n\n`;
@@ -46,6 +48,16 @@
           `STEP: ${t.step} / ` +
           `Q: ${t.question_no ?? "-"} / ` +
           `S: ${t.session_no ?? "-"}`;
+      }
+
+      function applyThreadFromResponse(data) {
+        if (data?.thread) {
+          window.__STATE__ = window.__STATE__ ?? {};
+          window.__STATE__.thread = data.thread;
+          renderDebug();
+          return true;
+        }
+        return false;
       }
 
       async function fetchState() {
@@ -111,6 +123,27 @@
         } catch (err) {
           console.error("[init] error", err);
           $debug.textContent = "init error (console見て)";
+        }
+      });
+
+      // === 次へ（手動で thread close）===
+      $next.addEventListener("click", async () => {
+        $next.disabled = true;
+        try {
+          appendLine("---- このスレッドを終了します ----");
+          const ok = await closeThread();
+          if (!ok) return;
+
+          // 1thread=1page なので、ログをクリアして新スレッドに切り替え
+          clearLog();
+          await ensureThread();
+          appendLine("（新しいスレッドを開始しました）");
+          renderDebug();
+        } catch (err) {
+          console.error("[thread/close] error", err);
+          appendLine(`[error] ${String(err)}`);
+        } finally {
+          $next.disabled = false;
         }
       });
 
