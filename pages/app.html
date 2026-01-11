@@ -20,7 +20,6 @@
 
     <script>
       const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
-      const USER_ID = "test";
       const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
       const $log = document.getElementById("log");
@@ -29,6 +28,18 @@
       const $send = document.getElementById("send");
       const $next = document.getElementById("next");
 
+      const USER_ID = (() => {
+        const qs = new URLSearchParams(location.search);
+        const q = qs.get("user_id");
+        if (q && q.trim()) {
+          const v = q.trim();
+          localStorage.setItem("user_id", v);
+          return v;
+        }
+        const stored = localStorage.getItem("user_id");
+        return stored && stored.trim() ? stored.trim() : "test"; // dev fallback
+      })();
+      
       function appendLine(text) {
         if ($log.textContent) $log.textContent += `\n\n`;
         $log.textContent += text;
