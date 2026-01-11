@@ -62,16 +62,6 @@
         `S: ${t.session_no ?? "-"}`;
     }
 
-    function applyThreadFromResponse(data) {
-      if (data?.thread) {
-        window.__STATE__ = window.__STATE__ ?? {};
-        window.__STATE__.thread = data.thread;
-        renderDebug();
-        return true;
-      }
-      return false;
-    }
-
     async function fetchState() {
       const res = await fetch(
         `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
@@ -89,6 +79,44 @@
       return window.__STATE__;
     }
 
+    // ===== 追加：thread/messages =====
+    async function apiThreadMessages(threadId) {
+      const res = await fetch(
+        `${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(USER_ID)}&thread_id=${encodeURIComponent(threadId)}`,
+        { method: "GET" }
+      );
+      const data = await res.json().catch(() => ({}));
+      console.log("[thread/messages]", data);
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "thread/messages failed");
+      }
+      return data; // { ok, run, thread, messages }
+    }
+
+    function renderThreadMessagesToLog(messages) {
+      clearLog();
+      const msgs = messages || [];
+      if (msgs.length === 0) {
+        // 空でも「復元した」ことがわかるようにしたければここで案内を出してもOK
+        // appendLine("（このスレッドの会話はまだありません）");
+        return;
+      }
+      for (const m of msgs) {
+        const role = m.role || "?";
+        const content = m.content ?? "";
+        if (role === "user") appendLine(`You: ${content}`);
+        else if (role === "assistant") appendLine(`AI: ${content}`);
+        else appendLine(`${role}: ${content}`);
+      }
+    }
+
+    async function hydrateLogFromCurrentThread() {
+      const t = window.__STATE__?.thread;
+      if (!t?.id) return;
+      const msgData = await apiThreadMessages(t.id);
+      renderThreadMessagesToLog(msgData.messages || []);
+    }
+
     async function ensureThread() {
       const state = await fetchState();
       if (!state.run) {
@@ -96,7 +124,16 @@
         location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
         return null;
       }
-      if (state.thread) return state.thread;
+
+      // 既に thread があるなら、その thread の messages を復元して返す
+      if (state.thread) {
+        try {
+          await hydrateLogFromCurrentThread();
+        } catch (e) {
+          appendLine(`[ERROR] failed to load messages: ${String(e?.message || e)}`);
+        }
+        return state.thread;
+      }
 
       // なければ作る
       const res = await fetch(
@@ -108,6 +145,14 @@
 
       // start 後に state 再取得
       await fetchState();
+
+      // 新規でも messages を読み込み（基本空だけど、整合性のため）
+      try {
+        await hydrateLogFromCurrentThread();
+      } catch (e) {
+        appendLine(`[ERROR] failed to load messages: ${String(e?.message || e)}`);
+      }
+
       return window.__STATE__.thread;
     }
 
@@ -127,9 +172,7 @@
     }
 
     function shouldCloseFromResponse(data) {
-      // まずは約束のキー
       if (data?.close_thread === true) return true;
-      // 保険：サーバ側が thread.status を completed にして返してくるパターン
       if (data?.thread?.status === "completed") return true;
       return false;
     }
@@ -137,7 +180,6 @@
     // === 起動時 ===
     document.addEventListener("DOMContentLoaded", async () => {
       try {
-        // まず state を取って run の有無/状態を判定
         const res = await fetch(
           `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
           { method: "GET" }
@@ -145,15 +187,12 @@
         const st = await res.json();
         console.log("[thread/state:init]", st);
 
-        // run が無い / completed なら app に入れない（dashboardに戻す）
         if (!st?.run || st?.run?.status === "completed") {
-          // ここは好みでメッセージ出してもOK
-          // $debug.textContent = "run is not active; back to dashboard...";
           location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
           return;
         }
 
-        // run active のときだけスレッド確保へ
+        // run active のときだけスレッド確保へ（ここで復元も走る）
         await ensureThread();
       } catch (err) {
         console.error("[init] error", err);
@@ -171,7 +210,7 @@
 
         // 1thread=1page なので、ログをクリアして新スレッドに切り替え
         clearLog();
-        await ensureThread();
+        await ensureThread(); // ←新スレッド作成 & そのスレッドのmessages復元（基本空）
         appendLine("（新しいスレッドを開始しました）");
         renderDebug();
       } catch (err) {
@@ -224,7 +263,6 @@
           appendLine("---- このスレッドを終了します ----");
           const ok = await closeThread();
           if (ok) {
-            // 1thread=1page なので、ログをクリアして新スレッドに切り替え
             clearLog();
             await ensureThread();
             appendLine("（新しいスレッドを開始しました）");
@@ -235,7 +273,6 @@
         $msg.value = "";
       } catch (err) {
         console.error("[thread/message] error", err);
-        $log.textContent += `\n\n[error] ${String(err)}`;
         appendLine(`[error] ${String(err)}`);
       } finally {
         $send.disabled = false;
