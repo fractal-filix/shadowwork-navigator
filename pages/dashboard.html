@@ -45,7 +45,7 @@
       cursor: not-allowed;
     }
 
-    input {
+    input, select {
       padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid #ccc;
@@ -69,6 +69,84 @@
       padding: 12px;
       border-radius: 12px;
       overflow: auto;
+    }
+
+    /* history */
+    .history-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 900px) {
+      .history-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .list li {
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 10px;
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+    }
+
+    .list .meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      font-size: 12px;
+      color: #333;
+      background: #fafafa;
+      width: fit-content;
+    }
+
+    .btn-lite {
+      background: #fff;
+      color: #111;
+      border: 1px solid #bbb;
+    }
+
+    .chat {
+      border: 1px solid #eee;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fafafa;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      min-height: 120px;
+    }
+
+    .chat .line {
+      margin: 0 0 10px;
+      padding: 10px;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid #eee;
+    }
+
+    .chat .line .who {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 6px;
     }
   </style>
 </head>
@@ -105,6 +183,42 @@
 
     <h3>Step 2（30セッション）</h3>
     <ul id="step2List"></ul>
+  </div>
+
+  <!-- 履歴ビューア -->
+  <div class="card">
+    <h2>履歴</h2>
+    <div class="muted">過去run・過去threadの会話を閲覧できます（表示のみ）。</div>
+
+    <div style="height:12px"></div>
+
+    <div class="row">
+      <div>
+        <div class="muted">run</div>
+        <select id="runSelect">
+          <option>loading...</option>
+        </select>
+      </div>
+      <div class="muted" id="historyStatus"></div>
+    </div>
+
+    <div style="height:12px"></div>
+
+    <div class="history-grid">
+      <div>
+        <div class="row" style="justify-content: space-between;">
+          <h3 style="margin:0;">threads</h3>
+          <button id="refreshHistoryBtn" class="btn-lite" type="button">履歴を更新</button>
+        </div>
+        <ul id="threadsList" class="list"></ul>
+      </div>
+
+      <div>
+        <h3 style="margin:0;">messages</h3>
+        <div class="muted" id="messagesHeader" style="margin:8px 0;">thread を選択してください</div>
+        <div id="messagesView" class="chat"></div>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -177,6 +291,28 @@
       return data;
     }
 
+    // --- history APIs ---
+    async function apiRunsList(userId) {
+      const res = await fetch(`${API_BASE}/api/runs/list?user_id=${encodeURIComponent(userId)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "runs/list failed");
+      return data; // { ok, runs: [...] }
+    }
+
+    async function apiThreadsList(userId, runNo) {
+      const res = await fetch(`${API_BASE}/api/threads/list?user_id=${encodeURIComponent(userId)}&run_no=${encodeURIComponent(runNo)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "threads/list failed");
+      return data; // { ok, run, threads: [...] }
+    }
+
+    async function apiThreadMessages(userId, threadId) {
+      const res = await fetch(`${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(userId)}&thread_id=${encodeURIComponent(threadId)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "thread/messages failed");
+      return data; // { ok, run, thread, messages: [...] }
+    }
+
     function renderLists(current) {
       const step1 = document.getElementById("step1List");
       const step2 = document.getElementById("step2List");
@@ -221,6 +357,22 @@
       location.href = qsUserIdUrl("/app.html", userId);
     }
 
+    function formatThreadLabel(t) {
+      if (!t) return "";
+      if (Number(t.step) === 1) return `Step1 / Q${t.question_no}`;
+      if (Number(t.step) === 2) return `Step2 / Session ${t.session_no}`;
+      return `Step${t.step}`;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
     async function main() {
       const userIdInput = document.getElementById("userIdInput");
       const statusLine = document.getElementById("statusLine");
@@ -228,16 +380,158 @@
       const hint = document.getElementById("hint");
       const debug = document.getElementById("debug");
 
+      // history dom
+      const runSelect = document.getElementById("runSelect");
+      const threadsList = document.getElementById("threadsList");
+      const messagesView = document.getElementById("messagesView");
+      const messagesHeader = document.getElementById("messagesHeader");
+      const historyStatus = document.getElementById("historyStatus");
+      const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
+
       let userId = getUserId();
       userIdInput.value = userId;
+
+      // history state
+      let __runs = [];
+      let __selectedRunNo = null;
+      let __selectedThreadId = null;
 
       userIdInput.addEventListener("change", async () => {
         setUserId(userIdInput.value);
         userId = getUserId();
-        await refresh();
+        await refreshAll();
       });
 
-      async function refresh() {
+      function resetHistoryUI() {
+        runSelect.innerHTML = `<option value="">(no runs)</option>`;
+        threadsList.innerHTML = "";
+        messagesHeader.textContent = "thread を選択してください";
+        messagesView.innerHTML = "";
+        historyStatus.textContent = "";
+        __runs = [];
+        __selectedRunNo = null;
+        __selectedThreadId = null;
+      }
+
+      function renderMessages(messages) {
+        if (!messages || messages.length === 0) {
+          messagesView.innerHTML = `<div class="muted">（messages がありません）</div>`;
+          return;
+        }
+        messagesView.innerHTML = messages.map(m => {
+          const who = escapeHtml(m.role || "?");
+          const seq = m.seq != null ? `#${m.seq}` : "";
+          const when = m.created_at ? escapeHtml(m.created_at) : "";
+          const content = escapeHtml(m.content || "");
+          return `
+            <div class="line">
+              <div class="who">${who} ${seq} <span class="muted">${when}</span></div>
+              <div>${content}</div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      async function loadRunsAndSelect(defaultRunNo) {
+        historyStatus.textContent = "runs 読み込み中...";
+        const data = await apiRunsList(userId);
+        __runs = data?.runs ?? [];
+
+        runSelect.innerHTML = "";
+        if (__runs.length === 0) {
+          runSelect.innerHTML = `<option value="">(no runs)</option>`;
+          __selectedRunNo = null;
+          historyStatus.textContent = "run がありません（未実施）";
+          return;
+        }
+
+        for (const r of __runs) {
+          const opt = document.createElement("option");
+          opt.value = String(r.run_no);
+          opt.textContent = `run #${r.run_no} (${r.status})`;
+          runSelect.appendChild(opt);
+        }
+
+        // 既定：state の run_no があればそれ、なければ最新（配列先頭を想定）
+        const fallback = String(__runs[0].run_no);
+        __selectedRunNo = defaultRunNo != null ? String(defaultRunNo) : fallback;
+
+        // 存在しない run_no を指定された場合は fallback
+        if (!__runs.some(r => String(r.run_no) === String(__selectedRunNo))) {
+          __selectedRunNo = fallback;
+        }
+
+        runSelect.value = __selectedRunNo;
+        historyStatus.textContent = "";
+      }
+
+      async function loadThreadsForSelectedRun() {
+        threadsList.innerHTML = "";
+        messagesHeader.textContent = "thread を選択してください";
+        messagesView.innerHTML = "";
+        __selectedThreadId = null;
+
+        if (!__selectedRunNo) {
+          historyStatus.textContent = "run を選択してください";
+          return;
+        }
+
+        historyStatus.textContent = `threads 読み込み中 (run #${__selectedRunNo})...`;
+        const data = await apiThreadsList(userId, __selectedRunNo);
+        const threads = data?.threads ?? [];
+
+        historyStatus.textContent = `run #${__selectedRunNo}: threads=${threads.length}`;
+
+        if (threads.length === 0) {
+          threadsList.innerHTML = `<li><div class="muted">（threads がありません）</div></li>`;
+          return;
+        }
+
+        for (const t of threads) {
+          const li = document.createElement("li");
+
+          const left = document.createElement("div");
+          left.className = "meta";
+
+          const title = document.createElement("div");
+          title.textContent = formatThreadLabel(t);
+
+          const sub = document.createElement("div");
+          sub.innerHTML = `<span class="pill">${escapeHtml(t.status)}</span> <span class="muted">${escapeHtml(t.created_at || "")}</span>`;
+
+          left.appendChild(title);
+          left.appendChild(sub);
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-lite";
+          btn.textContent = "履歴を見る";
+          btn.onclick = async () => {
+            try {
+              btn.disabled = true;
+              historyStatus.textContent = "messages 読み込み中...";
+              __selectedThreadId = t.id;
+
+              const msgData = await apiThreadMessages(userId, t.id);
+              const threadLabel = formatThreadLabel(msgData?.thread || t);
+              messagesHeader.textContent = `${threadLabel} / thread_id=${t.id}`;
+              renderMessages(msgData?.messages ?? []);
+
+              historyStatus.textContent = "";
+            } catch (e) {
+              historyStatus.textContent = `エラー: ${String(e?.message || e)}`;
+            } finally {
+              btn.disabled = false;
+            }
+          };
+
+          li.appendChild(left);
+          li.appendChild(btn);
+          threadsList.appendChild(li);
+        }
+      }
+
+      async function refreshPrimaryArea() {
         primaryBtn.disabled = true;
         statusLine.textContent = "loading...";
         hint.textContent = "";
@@ -291,20 +585,54 @@
             primaryBtn.disabled = false;
           }
         };
+
+        return state;
       }
+
+      async function refreshHistoryArea(defaultRunNoFromState) {
+        resetHistoryUI();
+        try {
+          await loadRunsAndSelect(defaultRunNoFromState);
+          await loadThreadsForSelectedRun();
+        } catch (e) {
+          historyStatus.textContent = `エラー: ${String(e?.message || e)}`;
+        }
+      }
+
+      async function refreshAll() {
+        // Primary (state) -> History default run selection
+        const state = await refreshPrimaryArea().catch((e) => {
+          debug.textContent = String(e?.message || e);
+          return null;
+        });
+
+        const defaultRunNo = state?.run?.run_no ?? null;
+        await refreshHistoryArea(defaultRunNo);
+      }
+
+      runSelect.addEventListener("change", async () => {
+        __selectedRunNo = runSelect.value || null;
+        await loadThreadsForSelectedRun().catch((e) => {
+          historyStatus.textContent = `エラー: ${String(e?.message || e)}`;
+        });
+      });
+
+      refreshHistoryBtn.addEventListener("click", async () => {
+        await refreshAll();
+      });
 
       // BFCache（戻る）やタブ復帰でUIが古い状態のまま復元されるのを防ぐ
       window.addEventListener("pageshow", () => {
-        refresh().catch(() => { });
+        refreshAll().catch(() => { });
       });
 
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
-          refresh().catch(() => { });
+          refreshAll().catch(() => { });
         }
       });
 
-      await refresh();
+      await refreshAll();
     }
 
     main().catch((e) => {
