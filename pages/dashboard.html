@@ -1,269 +1,316 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Shadowwork Navigator - Dashboard</title>
-    <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; max-width: 880px; margin: 24px auto; padding: 0 16px; }
-      .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
-      .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-      .muted { color:#666; }
-      button { padding: 10px 14px; border-radius: 10px; border: 1px solid #444; background: #111; color: #fff; cursor: pointer; }
-      button[disabled] { opacity: .4; cursor: not-allowed; }
-      input { padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; min-width: 220px; }
-      ul { margin: 8px 0 0; padding-left: 18px; }
-      code { background:#f6f6f6; padding:2px 6px; border-radius: 6px; }
-      pre { background:#0b0b0b; color:#d9d9d9; padding: 12px; border-radius: 12px; overflow:auto; }
-    </style>
-  </head>
-  <body>
-    <h1>Dashboard</h1>
 
-    <div class="card">
-      <div class="row">
-        <div>
-          <div class="muted">user_id</div>
-          <input id="userIdInput" placeholder="test / newtest など" />
-        </div>
-        <div>
-          <div class="muted">状態</div>
-          <div id="statusLine">loading...</div>
-        </div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shadowwork Navigator - Dashboard</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      max-width: 880px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .muted {
+      color: #666;
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      min-width: 220px;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+
+    code {
+      background: #f6f6f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    pre {
+      background: #0b0b0b;
+      color: #d9d9d9;
+      padding: 12px;
+      border-radius: 12px;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Dashboard</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">user_id</div>
+        <input id="userIdInput" placeholder="test / newtest など" />
       </div>
-
-      <div style="height:12px"></div>
-
-      <div class="row">
-        <button id="primaryBtn" disabled>...</button>
-        <button id="openAppBtn" disabled>app を開く</button>
-        <span class="muted" id="hint"></span>
+      <div>
+        <div class="muted">状態</div>
+        <div id="statusLine">loading...</div>
       </div>
     </div>
 
-    <div class="card">
-      <h2>全体一覧（表示のみ）</h2>
-      <div class="muted">※ここはクリック不要。進捗の全体像だけ見せる。</div>
+    <div style="height:12px"></div>
 
-      <h3>Step 1（5つの質問）</h3>
-      <ul id="step1List"></ul>
-
-      <h3>Step 2（30セッション）</h3>
-      <ul id="step2List"></ul>
+    <div class="row">
+      <button id="primaryBtn" disabled>...</button>
+      <span class="muted" id="hint"></span>
     </div>
+  </div>
 
-    <div class="card">
-      <h2>debug</h2>
-      <pre id="debug"></pre>
-    </div>
+  <div class="card">
+    <h2>全体一覧（表示のみ）</h2>
+    <div class="muted">※ここはクリック不要。進捗の全体像だけ見せる。</div>
 
-    <script>
-      const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+    <h3>Step 1（5つの質問）</h3>
+    <ul id="step1List"></ul>
 
-      function getUserId() {
-        const qs = new URLSearchParams(location.search);
-        const q = qs.get("user_id");
-        if (q && q.trim()) {
-          const v = q.trim();
-          localStorage.setItem("user_id", v);
-          return v;
-        }
-        const stored = localStorage.getItem("user_id");
-        return stored && stored.trim() ? stored.trim() : "test";
+    <h3>Step 2（30セッション）</h3>
+    <ul id="step2List"></ul>
+  </div>
+
+  <div class="card">
+    <h2>debug</h2>
+    <pre id="debug"></pre>
+  </div>
+
+  <script>
+    const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+
+    function getUserId() {
+      const qs = new URLSearchParams(location.search);
+      const q = qs.get("user_id");
+      if (q && q.trim()) {
+        const v = q.trim();
+        localStorage.setItem("user_id", v);
+        return v;
+      }
+      const stored = localStorage.getItem("user_id");
+      return stored && stored.trim() ? stored.trim() : "test";
+    }
+
+    function setUserId(v) {
+      const val = (v || "").trim();
+      if (!val) return;
+      localStorage.setItem("user_id", val);
+    }
+
+    function qsUserIdUrl(basePath, userId) {
+      const u = new URL(basePath, location.origin);
+      u.searchParams.set("user_id", userId);
+      return u.toString();
+    }
+
+    async function apiGetState(userId) {
+      const res = await fetch(`${API_BASE}/api/thread/state?user_id=${encodeURIComponent(userId)}`);
+      return await res.json();
+    }
+
+    async function apiRunStart(userId) {
+      const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "run/start failed");
+      return data;
+    }
+
+    async function apiRunRestart(userId) {
+      const res = await fetch(`${API_BASE}/api/run/restart?user_id=${encodeURIComponent(userId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "run/restart failed");
+      return data;
+    }
+
+    async function apiThreadStart(userId) {
+      const res = await fetch(`${API_BASE}/api/thread/start?user_id=${encodeURIComponent(userId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "thread/start failed");
+      return data;
+    }
+
+    function renderLists(current) {
+      const step1 = document.getElementById("step1List");
+      const step2 = document.getElementById("step2List");
+      step1.innerHTML = "";
+      step2.innerHTML = "";
+
+      for (let i = 1; i <= 5; i++) {
+        const li = document.createElement("li");
+        li.textContent = `Q${i}`;
+        if (current?.step === 1 && current?.question_no === i) li.innerHTML += " <code>now</code>";
+        step1.appendChild(li);
       }
 
-      function setUserId(v) {
-        const val = (v || "").trim();
-        if (!val) return;
-        localStorage.setItem("user_id", val);
+      for (let i = 1; i <= 30; i++) {
+        const li = document.createElement("li");
+        li.textContent = `Session ${i}`;
+        if (current?.step === 2 && current?.session_no === i) li.innerHTML += " <code>now</code>";
+        step2.appendChild(li);
       }
+    }
 
-      function qsUserIdUrl(basePath, userId) {
-        const u = new URL(basePath, location.origin);
-        u.searchParams.set("user_id", userId);
-        return u.toString();
+    function decidePrimary(state) {
+      // state: { ok, run, thread, last_message }
+      const run = state?.run;
+      const thread = state?.thread;
+
+      if (!run) {
+        return { label: "開始する", mode: "START", hint: "未開始：run を作って最初の thread を開きます" };
       }
-
-      async function apiGetState(userId) {
-        const res = await fetch(`${API_BASE}/api/thread/state?user_id=${encodeURIComponent(userId)}`);
-        return await res.json();
+      if (run.status === "completed") {
+        return { label: "最初からやり直す", mode: "RESTART", hint: "完走済：restart して最初の thread を開きます" };
       }
-
-      async function apiRunStart(userId) {
-        const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "run/start failed");
-        return data;
+      // run active
+      if (thread && thread.status === "active") {
+        return { label: "続きから再開", mode: "RESUME", hint: "現在の active thread を app で開きます" };
       }
+      // run active, thread none
+      return { label: "次へ進む", mode: "NEXT", hint: "active thread が無いので次の thread を作って app を開きます" };
+    }
 
-      async function apiRunRestart(userId) {
-        const res = await fetch(`${API_BASE}/api/run/restart?user_id=${encodeURIComponent(userId)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "run/restart failed");
-        return data;
-      }
+    function openApp(userId) {
+      location.href = qsUserIdUrl("/app.html", userId);
+    }
 
-      async function apiThreadStart(userId) {
-        const res = await fetch(`${API_BASE}/api/thread/start?user_id=${encodeURIComponent(userId)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "thread/start failed");
-        return data;
-      }
+    async function main() {
+      const userIdInput = document.getElementById("userIdInput");
+      const statusLine = document.getElementById("statusLine");
+      const primaryBtn = document.getElementById("primaryBtn");
+      const hint = document.getElementById("hint");
+      const debug = document.getElementById("debug");
 
-      function renderLists(current) {
-        const step1 = document.getElementById("step1List");
-        const step2 = document.getElementById("step2List");
-        step1.innerHTML = "";
-        step2.innerHTML = "";
+      let userId = getUserId();
+      userIdInput.value = userId;
 
-        for (let i = 1; i <= 5; i++) {
-          const li = document.createElement("li");
-          li.textContent = `Q${i}`;
-          if (current?.step === 1 && current?.question_no === i) li.innerHTML += " <code>now</code>";
-          step1.appendChild(li);
-        }
+      userIdInput.addEventListener("change", async () => {
+        setUserId(userIdInput.value);
+        userId = getUserId();
+        await refresh();
+      });
 
-        for (let i = 1; i <= 30; i++) {
-          const li = document.createElement("li");
-          li.textContent = `Session ${i}`;
-          if (current?.step === 2 && current?.session_no === i) li.innerHTML += " <code>now</code>";
-          step2.appendChild(li);
-        }
-      }
+      async function refresh() {
+        primaryBtn.disabled = true;
+        statusLine.textContent = "loading...";
+        hint.textContent = "";
+        debug.textContent = "";
 
-      function decidePrimary(state) {
-        // state: { ok, run, thread, last_message }
+        const state = await apiGetState(userId);
+        debug.textContent = JSON.stringify(state, null, 2);
+
         const run = state?.run;
         const thread = state?.thread;
 
-        if (!run) {
-          return { label: "開始する", mode: "START", hint: "未開始：run を作って最初の thread を開きます" };
-        }
-        if (run.status === "completed") {
-          return { label: "最初からやり直す", mode: "RESTART", hint: "完走済：restart して最初の thread を開きます" };
-        }
-        // run active
-        if (thread && thread.status === "active") {
-          return { label: "続きから再開", mode: "RESUME", hint: "現在の active thread を app で開きます" };
-        }
-        // run active, thread none
-        return { label: "次へ進む", mode: "NEXT", hint: "active thread が無いので次の thread を作って app を開きます" };
-      }
-
-      function openApp(userId) {
-        location.href = qsUserIdUrl("/app.html", userId);
-      }
-
-      async function main() {
-        const userIdInput = document.getElementById("userIdInput");
-        const statusLine = document.getElementById("statusLine");
-        const primaryBtn = document.getElementById("primaryBtn");
-        const openAppBtn = document.getElementById("openAppBtn");
-        const hint = document.getElementById("hint");
-        const debug = document.getElementById("debug");
-
-        let userId = getUserId();
-        userIdInput.value = userId;
-
-        userIdInput.addEventListener("change", async () => {
-          setUserId(userIdInput.value);
-          userId = getUserId();
-          await refresh();
-        });
-
-        async function refresh() {
-          primaryBtn.disabled = true;
-          openAppBtn.disabled = true;
-          statusLine.textContent = "loading...";
-          hint.textContent = "";
-          debug.textContent = "";
-
-          const state = await apiGetState(userId);
-          debug.textContent = JSON.stringify(state, null, 2);
-
-          const run = state?.run;
-          const thread = state?.thread;
-
-          statusLine.textContent =
-            !run ? "run: null" :
+        statusLine.textContent =
+          !run ? "run: null" :
             `run: #${run.run_no} (${run.status}) / thread: ` +
             (thread ? `step=${thread.step} q=${thread.question_no ?? "-"} s=${thread.session_no ?? "-"} (${thread.status})` : "null");
 
-          renderLists(thread);
+        renderLists(thread);
 
-          const p = decidePrimary(state);
-          primaryBtn.textContent = p.label;
-          hint.textContent = p.hint;
+        const p = decidePrimary(state);
+        primaryBtn.textContent = p.label;
+        hint.textContent = p.hint;
 
-          primaryBtn.disabled = false;
-          // run が無い（未開始）なら app を開けない
-          openAppBtn.disabled = !run;
+        primaryBtn.disabled = false;
 
-          primaryBtn.onclick = async () => {
-            primaryBtn.disabled = true;
-            hint.textContent = "処理中...";
+        primaryBtn.onclick = async () => {
+          primaryBtn.disabled = true;
+          hint.textContent = "処理中...";
 
-            try {
-              if (p.mode === "START") {
-                await apiRunStart(userId);
-                await apiThreadStart(userId);
-                openApp(userId);
-                return;
-              }
-              if (p.mode === "RESTART") {
-                await apiRunRestart(userId);
-                await apiThreadStart(userId);
-                openApp(userId);
-                return;
-              }
-              if (p.mode === "NEXT") {
-                await apiThreadStart(userId);
-                openApp(userId);
-                return;
-              }
-              // RESUME
+          try {
+            if (p.mode === "START") {
+              await apiRunStart(userId);
+              await apiThreadStart(userId);
               openApp(userId);
-            } catch (e) {
-              hint.textContent = `エラー: ${String(e?.message || e)}`;
-              primaryBtn.disabled = false;
+              return;
             }
-          };
-
-          openAppBtn.onclick = () => {
-            if (!run) return;
+            if (p.mode === "RESTART") {
+              await apiRunRestart(userId);
+              await apiThreadStart(userId);
+              openApp(userId);
+              return;
+            }
+            if (p.mode === "NEXT") {
+              await apiThreadStart(userId);
+              openApp(userId);
+              return;
+            }
+            // RESUME
             openApp(userId);
-          };
-        }
-
-        // BFCache（戻る）やタブ復帰でUIが古い状態のまま復元されるのを防ぐ
-        window.addEventListener("pageshow", () => {
-          refresh().catch(() => {});
-        });
-
-        document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") {
-            refresh().catch(() => {});
+          } catch (e) {
+            hint.textContent = `エラー: ${String(e?.message || e)}`;
+            primaryBtn.disabled = false;
           }
-        });
-
-        await refresh();
+        };
       }
 
-      main().catch((e) => {
-        document.getElementById("debug").textContent = String(e?.message || e);
+      // BFCache（戻る）やタブ復帰でUIが古い状態のまま復元されるのを防ぐ
+      window.addEventListener("pageshow", () => {
+        refresh().catch(() => { });
       });
-    </script>
-  </body>
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          refresh().catch(() => { });
+        }
+      });
+
+      await refresh();
+    }
+
+    main().catch((e) => {
+      document.getElementById("debug").textContent = String(e?.message || e);
+    });
+  </script>
+</body>
+
 </html>
