@@ -435,7 +435,9 @@
       async function loadRunsAndSelect(defaultRunNo) {
         historyStatus.textContent = "runs 読み込み中...";
         const data = await apiRunsList(userId);
-        __runs = data?.runs ?? [];
+        __runs = (data?.runs ?? [])
+          .slice()
+          .sort((a, b) => Number(b.run_no) - Number(a.run_no));
 
         runSelect.innerHTML = "";
         if (__runs.length === 0) {
