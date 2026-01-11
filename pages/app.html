@@ -80,6 +80,7 @@
     }
 
     // ===== 追加：thread/messages =====
+
     async function apiThreadMessages(threadId) {
       const res = await fetch(
         `${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(USER_ID)}&thread_id=${encodeURIComponent(threadId)}`,
@@ -178,26 +179,53 @@
     }
 
     // === 起動時 ===
-    document.addEventListener("DOMContentLoaded", async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-          { method: "GET" }
-        );
-        const st = await res.json();
-        console.log("[thread/state:init]", st);
+    // NOTE: dashboard から「続きから再開」で遷移したとき、
+    // ブラウザの BFCache（戻る/進むキャッシュ）で app.html が復元されると、
+    // DOMContentLoaded が発火せず “過去の表示のまま” になることがある。
+    // そのため pageshow / visibilitychange でも必ず復元処理を走らせる。
 
-        if (!st?.run || st?.run?.status === "completed") {
-          location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
-          return;
+    let __BOOT_PROMISE__ = null;
+
+    async function boot() {
+      if (__BOOT_PROMISE__) return __BOOT_PROMISE__;
+      __BOOT_PROMISE__ = (async () => {
+        try {
+          const res = await fetch(
+            `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
+            { method: "GET" }
+          );
+          const st = await res.json();
+          console.log("[thread/state:init]", st);
+
+          if (!st?.run || st?.run?.status === "completed") {
+            location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+            return;
+          }
+
+          // run active のときだけスレッド確保へ（ここで復元も走る）
+          await ensureThread();
+        } catch (err) {
+          console.error("[init] error", err);
+          $debug.textContent = "init error (console見て)";
+        } finally {
+          __BOOT_PROMISE__ = null;
         }
+      })();
+      return __BOOT_PROMISE__;
+    }
 
-        // run active のときだけスレッド確保へ（ここで復元も走る）
-        await ensureThread();
-      } catch (err) {
-        console.error("[init] error", err);
-        $debug.textContent = "init error (console見て)";
-      }
+    document.addEventListener("DOMContentLoaded", () => {
+      boot();
+    });
+
+    // BFCache 復元対策
+    window.addEventListener("pageshow", () => {
+      boot();
+    });
+
+    // タブ復帰対策
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") boot();
     });
 
     // === 次へ（手動で thread close）===
