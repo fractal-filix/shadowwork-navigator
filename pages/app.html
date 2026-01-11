@@ -126,6 +126,12 @@
         return null;
       }
 
+      // run完走済みなら app の責務外なので dashboard に戻す
+      if (state.run?.status === "completed") {
+        location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+        return null;
+      }
+
       // 既に thread があるなら、その thread の messages を復元して返す
       if (state.thread) {
         try {
@@ -143,6 +149,17 @@
       );
       const json = await res.json();
       console.log("[thread/start]", json);
+
+      // thread/start が完走を返すケース（例：S30後）は即 dashboard
+      // （API仕様：完走時に 400 + { ok:false, run:{status:"completed"}, thread:null } など）
+      if (!res.ok || !json?.ok) {
+        if (json?.run?.status === "completed") {
+          location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+          return null;
+        }
+        appendLine(`[ERROR] thread/start ${JSON.stringify(json)}`);
+        return null;
+      }
 
       // start 後に state 再取得
       await fetchState();
