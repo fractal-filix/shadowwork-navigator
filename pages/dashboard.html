@@ -247,6 +247,17 @@
           };
         }
 
+        // BFCache（戻る）やタブ復帰でUIが古い状態のまま復元されるのを防ぐ
+        window.addEventListener("pageshow", () => {
+          refresh().catch(() => {});
+        });
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            refresh().catch(() => {});
+          }
+        });
+
         await refresh();
       }
 
