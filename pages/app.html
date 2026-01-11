@@ -137,8 +137,24 @@
     // === 起動時 ===
     document.addEventListener("DOMContentLoaded", async () => {
       try {
-        const t = await ensureThread();
-        if (!t) return;
+        // まず state を取って run の有無/状態を判定
+        const res = await fetch(
+          `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
+          { method: "GET" }
+        );
+        const st = await res.json();
+        console.log("[thread/state:init]", st);
+
+        // run が無い / completed なら app に入れない（dashboardに戻す）
+        if (!st?.run || st?.run?.status === "completed") {
+          // ここは好みでメッセージ出してもOK
+          // $debug.textContent = "run is not active; back to dashboard...";
+          location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+          return;
+        }
+
+        // run active のときだけスレッド確保へ
+        await ensureThread();
       } catch (err) {
         console.error("[init] error", err);
         $debug.textContent = "init error (console見て)";
