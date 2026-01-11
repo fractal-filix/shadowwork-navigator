@@ -1,229 +1,231 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Shadowwork (Members)</title>
-  </head>
 
-  <body>
-    <h1>Shadowwork（会員ページ）</h1>
+<head>
+  <meta charset="utf-8" />
+  <title>Shadowwork (Members)</title>
+</head>
 
-    <div id="debug-state"></div>
+<body>
+  <h1>Shadowwork（会員ページ）</h1>
 
-    <div>
-      <textarea id="msg" rows="4" cols="50" placeholder="ここに入力"></textarea><br />
-      <button id="send">送信</button>
-      <button id="next">次へ</button>
-    </div>
+  <div id="debug-state"></div>
 
-    <pre id="log"></pre>
+  <div>
+    <textarea id="msg" rows="4" cols="50" placeholder="ここに入力"></textarea><br />
+    <button id="send">送信</button>
+    <button id="next">次へ</button>
+  </div>
 
-    <script>
-      const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
-      const DEBUG_UI = false; // true にするとUIにもJSONを出す
+  <pre id="log"></pre>
 
-      const $log = document.getElementById("log");
-      const $msg = document.getElementById("msg");
-      const $debug = document.getElementById("debug-state");
-      const $send = document.getElementById("send");
-      const $next = document.getElementById("next");
+  <script>
+    const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+    const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
-      const USER_ID = (() => {
-        const qs = new URLSearchParams(location.search);
-        const q = qs.get("user_id");
-        if (q && q.trim()) {
-          const v = q.trim();
-          localStorage.setItem("user_id", v);
-          return v;
+    const $log = document.getElementById("log");
+    const $msg = document.getElementById("msg");
+    const $debug = document.getElementById("debug-state");
+    const $send = document.getElementById("send");
+    const $next = document.getElementById("next");
+
+    const USER_ID = (() => {
+      const qs = new URLSearchParams(location.search);
+      const q = qs.get("user_id");
+      if (q && q.trim()) {
+        const v = q.trim();
+        localStorage.setItem("user_id", v);
+        return v;
+      }
+      const stored = localStorage.getItem("user_id");
+      return stored && stored.trim() ? stored.trim() : "test"; // dev fallback
+    })();
+
+    function appendLine(text) {
+      if ($log.textContent) $log.textContent += `\n\n`;
+      $log.textContent += text;
+    }
+
+    function clearLog() {
+      $log.textContent = "";
+    }
+
+    function renderDebug() {
+      const t = window.__STATE__?.thread;
+      if (!t) {
+        $debug.textContent = "thread: null";
+        return;
+      }
+      $debug.textContent =
+        `STEP: ${t.step} / ` +
+        `Q: ${t.question_no ?? "-"} / ` +
+        `S: ${t.session_no ?? "-"}`;
+    }
+
+    function applyThreadFromResponse(data) {
+      if (data?.thread) {
+        window.__STATE__ = window.__STATE__ ?? {};
+        window.__STATE__.thread = data.thread;
+        renderDebug();
+        return true;
+      }
+      return false;
+    }
+
+    async function fetchState() {
+      const res = await fetch(
+        `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
+        { method: "GET" }
+      );
+      const json = await res.json();
+      console.log("[thread/state]", json);
+
+      window.__STATE__ = {
+        run: json.run ?? null,
+        thread: json.thread ?? null,
+        lastMessage: json.last_message ?? null,
+      };
+      renderDebug();
+      return window.__STATE__;
+    }
+
+    async function ensureThread() {
+      const state = await fetchState();
+      if (!state.run) {
+        // 未開始：appの責務外なので dashboard に戻す
+        location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+        return null;
+      }
+      if (state.thread) return state.thread;
+
+      // なければ作る
+      const res = await fetch(
+        `${API_BASE}/api/thread/start?user_id=${encodeURIComponent(USER_ID)}`,
+        { method: "POST" }
+      );
+      const json = await res.json();
+      console.log("[thread/start]", json);
+
+      // start 後に state 再取得
+      await fetchState();
+      return window.__STATE__.thread;
+    }
+
+    async function closeThread() {
+      const res = await fetch(`${API_BASE}/api/thread/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: USER_ID }),
+      });
+      const json = await res.json().catch(() => ({}));
+      console.log("[thread/close]", json);
+      if (!res.ok || !json.ok) {
+        appendLine(`[ERROR] thread/close ${JSON.stringify(json)}`);
+        return false;
+      }
+      return true;
+    }
+
+    function shouldCloseFromResponse(data) {
+      // まずは約束のキー
+      if (data?.close_thread === true) return true;
+      // 保険：サーバ側が thread.status を completed にして返してくるパターン
+      if (data?.thread?.status === "completed") return true;
+      return false;
+    }
+
+    // === 起動時 ===
+    document.addEventListener("DOMContentLoaded", async () => {
+      try {
+        const t = await ensureThread();
+        if (!t) return;
+      } catch (err) {
+        console.error("[init] error", err);
+        $debug.textContent = "init error (console見て)";
+      }
+    });
+
+    // === 次へ（手動で thread close）===
+    $next.addEventListener("click", async () => {
+      $next.disabled = true;
+      try {
+        appendLine("---- このスレッドを終了します ----");
+        const ok = await closeThread();
+        if (!ok) return;
+
+        // 1thread=1page なので、ログをクリアして新スレッドに切り替え
+        clearLog();
+        await ensureThread();
+        appendLine("（新しいスレッドを開始しました）");
+        renderDebug();
+      } catch (err) {
+        console.error("[thread/close] error", err);
+        appendLine(`[error] ${String(err)}`);
+      } finally {
+        $next.disabled = false;
+      }
+    });
+
+    // === 送信 ===
+    $send.addEventListener("click", async () => {
+      const message = $msg.value.trim();
+      if (!message) return;
+
+      $send.disabled = true;
+
+      try {
+        appendLine(`You: ${message}`);
+
+        const res = await fetch(`${API_BASE}/api/thread/message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: USER_ID, message }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        console.log("[thread/message]", data);
+        if (DEBUG_UI) {
+          appendLine(`[thread/message] ${JSON.stringify(data)}`);
         }
-        const stored = localStorage.getItem("user_id");
-        return stored && stored.trim() ? stored.trim() : "test"; // dev fallback
-      })();
-      
-      function appendLine(text) {
-        if ($log.textContent) $log.textContent += `\n\n`;
-        $log.textContent += text;
-      }
 
-      function clearLog() {
-        $log.textContent = "";
-      }
-
-      function renderDebug() {
-        const t = window.__STATE__?.thread;
-        if (!t) {
-          $debug.textContent = "thread: null";
+        if (!res.ok || !data.ok) {
+          appendLine(`[ERROR] ${JSON.stringify(data)}`);
           return;
         }
-        $debug.textContent =
-          `STEP: ${t.step} / ` +
-          `Q: ${t.question_no ?? "-"} / ` +
-          `S: ${t.session_no ?? "-"}`;
-      }
 
-      function applyThreadFromResponse(data) {
-        if (data?.thread) {
+        // AIの返答を会話形式で表示
+        appendLine(`AI: ${data.reply ?? "(no reply)"}`);
+
+        if (!window.__STATE__) window.__STATE__ = {};
+        if (data.thread) {
           window.__STATE__ = window.__STATE__ ?? {};
           window.__STATE__.thread = data.thread;
           renderDebug();
-          return true;
         }
-        return false;
-      }
 
-      async function fetchState() {
-        const res = await fetch(
-          `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-          { method: "GET" }
-        );
-        const json = await res.json();
-        console.log("[thread/state]", json);
-
-        window.__STATE__ = {
-          run: json.run ?? null,
-          thread: json.thread ?? null,
-          lastMessage: json.last_message ?? null,
-        };
-        renderDebug();
-        return window.__STATE__;
-      }
-
-      async function ensureThread() {
-        const state = await fetchState();
-        if (!state.run) {
-         // 未開始：appの責務外なので dashboard に戻す
-         location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
-         return null;
-        }
-        if (state.thread) return state.thread;
-
-        // なければ作る
-        const res = await fetch(
-          `${API_BASE}/api/thread/start?user_id=${encodeURIComponent(USER_ID)}`,
-          { method: "POST" }
-        );
-        const json = await res.json();
-        console.log("[thread/start]", json);
-
-        // start 後に state 再取得
-        await fetchState();
-        return window.__STATE__.thread;
-      }
-
-      async function closeThread() {
-        const res = await fetch(`${API_BASE}/api/thread/close`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: USER_ID }),
-        });
-        const json = await res.json().catch(() => ({}));
-        console.log("[thread/close]", json);
-        if (!res.ok || !json.ok) {
-          appendLine(`[ERROR] thread/close ${JSON.stringify(json)}`);
-          return false;
-        }
-        return true;
-      }
-
-      function shouldCloseFromResponse(data) {
-        // まずは約束のキー
-        if (data?.close_thread === true) return true;
-        // 保険：サーバ側が thread.status を completed にして返してくるパターン
-        if (data?.thread?.status === "completed") return true;
-        return false;
-      }
-
-      // === 起動時 ===
-      document.addEventListener("DOMContentLoaded", async () => {
-        try {
-          const t = await ensureThread();
-          if (!t) return;
-        } catch (err) {
-          console.error("[init] error", err);
-          $debug.textContent = "init error (console見て)";
-        }
-      });
-
-      // === 次へ（手動で thread close）===
-      $next.addEventListener("click", async () => {
-        $next.disabled = true;
-        try {
+        // close_thread なら thread を閉じて次スレッドへ
+        if (shouldCloseFromResponse(data)) {
           appendLine("---- このスレッドを終了します ----");
           const ok = await closeThread();
-          if (!ok) return;
-
-          // 1thread=1page なので、ログをクリアして新スレッドに切り替え
-          clearLog();
-          await ensureThread();
-          appendLine("（新しいスレッドを開始しました）");
-          renderDebug();
-        } catch (err) {
-          console.error("[thread/close] error", err);
-          appendLine(`[error] ${String(err)}`);
-        } finally {
-          $next.disabled = false;
-        }
-      });
-
-      // === 送信 ===
-      $send.addEventListener("click", async () => {
-        const message = $msg.value.trim();
-        if (!message) return;
-
-        $send.disabled = true;
-
-        try {
-          appendLine(`You: ${message}`);
-
-          const res = await fetch(`${API_BASE}/api/thread/message`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: USER_ID, message }),
-          });
-
-          const data = await res.json().catch(() => ({}));
-          console.log("[thread/message]", data);
-          if (DEBUG_UI) {
-            appendLine(`[thread/message] ${JSON.stringify(data)}`);
-          }
-
-          if (!res.ok || !data.ok) {
-            appendLine(`[ERROR] ${JSON.stringify(data)}`);
-            return;
-          }
-
-          // AIの返答を会話形式で表示
-          appendLine(`AI: ${data.reply ?? "(no reply)"}`);
-
-          if (!window.__STATE__) window.__STATE__ = {};
-          if (data.thread) {
-            window.__STATE__ = window.__STATE__ ?? {};
-            window.__STATE__.thread = data.thread;
+          if (ok) {
+            // 1thread=1page なので、ログをクリアして新スレッドに切り替え
+            clearLog();
+            await ensureThread();
+            appendLine("（新しいスレッドを開始しました）");
             renderDebug();
           }
-
-          // close_thread なら thread を閉じて次スレッドへ
-          if (shouldCloseFromResponse(data)) {
-            appendLine("---- このスレッドを終了します ----");
-            const ok = await closeThread();
-            if (ok) {
-              // 1thread=1page なので、ログをクリアして新スレッドに切り替え
-              clearLog();
-              await ensureThread();
-              appendLine("（新しいスレッドを開始しました）");
-              renderDebug();
-            }
-          }
-
-          $msg.value = "";
-        } catch (err) {
-          console.error("[thread/message] error", err);
-          $log.textContent += `\n\n[error] ${String(err)}`;
-          appendLine(`[error] ${String(err)}`);
-        } finally {
-          $send.disabled = false;
         }
-      });
-    </script>
-  </body>
+
+        $msg.value = "";
+      } catch (err) {
+        console.error("[thread/message] error", err);
+        $log.textContent += `\n\n[error] ${String(err)}`;
+        appendLine(`[error] ${String(err)}`);
+      } finally {
+        $send.disabled = false;
+      }
+    });
+  </script>
+</body>
+
 </html>
