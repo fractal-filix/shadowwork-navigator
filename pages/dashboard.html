@@ -208,7 +208,8 @@
           hint.textContent = p.hint;
 
           primaryBtn.disabled = false;
-          openAppBtn.disabled = false;
+          // run が無い（未開始）なら app を開けない
+          openAppBtn.disabled = !run;
 
           primaryBtn.onclick = async () => {
             primaryBtn.disabled = true;
@@ -240,7 +241,10 @@
             }
           };
 
-          openAppBtn.onclick = () => openApp(userId);
+          openAppBtn.onclick = () => {
+            if (!run) return;
+            openApp(userId);
+          };
         }
 
         await refresh();
