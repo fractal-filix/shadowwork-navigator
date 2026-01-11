@@ -80,6 +80,7 @@
         console.log("[thread/state]", json);
 
         window.__STATE__ = {
+          run: json.run ?? null,
           thread: json.thread ?? null,
           lastMessage: json.last_message ?? null,
         };
@@ -89,6 +90,11 @@
 
       async function ensureThread() {
         const state = await fetchState();
+        if (!state.run) {
+         // 未開始：appの責務外なので dashboard に戻す
+         location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+         return null;
+        }
         if (state.thread) return state.thread;
 
         // なければ作る
@@ -130,7 +136,8 @@
       // === 起動時 ===
       document.addEventListener("DOMContentLoaded", async () => {
         try {
-          await ensureThread();
+          const t = await ensureThread();
+          if (!t) return;
         } catch (err) {
           console.error("[init] error", err);
           $debug.textContent = "init error (console見て)";
