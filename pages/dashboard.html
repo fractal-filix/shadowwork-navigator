@@ -221,11 +221,6 @@
     </div>
   </div>
 
-  <div class="card">
-    <h2>debug</h2>
-    <pre id="debug"></pre>
-  </div>
-
   <script>
     const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
     const DEBUG_UI = false; // true で console.log / debug欄 を出す
@@ -403,7 +398,6 @@
       const statusLine = document.getElementById("statusLine");
       const primaryBtn = document.getElementById("primaryBtn");
       const hint = document.getElementById("hint");
-      const debug = document.getElementById("debug");
 
       // history dom
       const runSelect = document.getElementById("runSelect");
@@ -568,10 +562,8 @@
         primaryBtn.disabled = true;
         statusLine.textContent = "loading...";
         hint.textContent = "";
-        debug.textContent = DEBUG_UI ? "" : ""; // 必要なら「DEBUG_UI=false」等を表示してもOK
 
         const state = await apiGetState(userId);
-        if (DEBUG_UI) debug.textContent = JSON.stringify(state, null, 2);
 
         const run = state?.run;
         const thread = state?.thread;
@@ -638,7 +630,7 @@
         dbg("[ui] refreshAll", { userId });
         // Primary (state) -> History default run selection
         const state = await refreshPrimaryArea().catch((e) => {
-          debug.textContent = String(e?.message || e);
+          console.error(e);
           dbgErr("[ui] refreshPrimaryArea error", e);
           return null;
         });
@@ -674,7 +666,7 @@
 
     main().catch((e) => {
       document.getElementById("debug").textContent = String(e?.message || e);
-      dbgErr("[main] fatal", e);
+      console.error(e);
     });
   </script>
 </body>
