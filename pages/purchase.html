@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shadowwork Navigator - Purchase</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      max-width: 720px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .muted {
+      color: #666;
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      min-width: 220px;
+    }
+
+    .ok {
+      color: #0a7a2f;
+      font-weight: 600;
+    }
+
+    .ng {
+      color: #b00020;
+      font-weight: 600;
+    }
+
+    code {
+      background: #f6f6f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>購入ページ（仮）</h1>
+
+  <div class="card">
+    <div class="muted">user_id</div>
+    <div class="row">
+      <input id="userIdInput" placeholder="test / newtest など" />
+      <span class="muted">※決済と紐付ける識別子（いまは簡易）</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">手順</h2>
+    <ol>
+      <li>「決済ページへ」からStripeへ進む</li>
+      <li>支払い後、このページに戻って「支払い確認」を押す</li>
+      <li>支払い済みなら dashboard に進めます</li>
+    </ol>
+
+    <div style="height:8px"></div>
+
+    <div class="row">
+      <button id="goCheckoutBtn" type="button">決済ページへ</button>
+      <button id="checkPaidBtn" type="button" class="btn-lite">支払い確認</button>
+      <button id="toDashboardBtn" type="button" class="btn-lite">Dashboardへ</button>
+    </div>
+
+    <div style="height:10px"></div>
+    <div id="status" class="muted">status: -</div>
+  </div>
+
+  <script>
+    const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+    const DEBUG_UI = false;
+
+    // TODO: ここをStripeのPayment Link / Checkout URLに差し替え
+    const CHECKOUT_URL = "https://example.com/stripe-checkout-url";
+
+    function dbg(...args) { if (DEBUG_UI) console.log(...args); }
+    function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
+
+    const $userIdInput = document.getElementById("userIdInput");
+    const $status = document.getElementById("status");
+    const $goCheckoutBtn = document.getElementById("goCheckoutBtn");
+    const $checkPaidBtn = document.getElementById("checkPaidBtn");
+    const $toDashboardBtn = document.getElementById("toDashboardBtn");
+
+    function getUserId() {
+      const qs = new URLSearchParams(location.search);
+      const q = qs.get("user_id");
+      if (q && q.trim()) {
+        const v = q.trim();
+        localStorage.setItem("user_id", v);
+        return v;
+      }
+      const stored = localStorage.getItem("user_id");
+      return stored && stored.trim() ? stored.trim() : "test";
+    }
+
+    function setUserId(v) {
+      const val = (v || "").trim();
+      if (!val) return;
+      localStorage.setItem("user_id", val);
+    }
+
+    function qsUserIdUrl(basePath, userId) {
+      const u = new URL(basePath, location.origin);
+      u.searchParams.set("user_id", userId);
+      return u.toString();
+    }
+
+    async function apiPaid(userId) {
+      const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
+      dbg("[api] paid ->", url);
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] paid <-", data);
+      return { ok: res.ok, data };
+    }
+
+    function setStatus(text, kind) {
+      $status.className = kind === "ok" ? "ok" : kind === "ng" ? "ng" : "muted";
+      $status.textContent = text;
+    }
+
+    let userId = getUserId();
+    $userIdInput.value = userId;
+
+    $userIdInput.addEventListener("change", () => {
+      setUserId($userIdInput.value);
+      userId = getUserId();
+      setStatus(`status: user_id set to ${userId}`, "muted");
+    });
+
+    $goCheckoutBtn.addEventListener("click", () => {
+      // Payment Link等に user_id を渡したい場合はここでパラメータ付与
+      // 例）const u = new URL(CHECKOUT_URL); u.searchParams.set("client_reference_id", userId); location.href = u.toString();
+      if (!CHECKOUT_URL || CHECKOUT_URL.includes("example.com")) {
+        setStatus("status: CHECKOUT_URL が未設定です（purchase.html の定数を差し替え）", "ng");
+        return;
+      }
+      location.href = CHECKOUT_URL;
+    });
+
+    $checkPaidBtn.addEventListener("click", async () => {
+      $checkPaidBtn.disabled = true;
+      try {
+        const r = await apiPaid(userId);
+        if (!r.ok) {
+          setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
+          return;
+        }
+        if (r.data?.paid === true) {
+          setStatus("status: 支払い確認OK。Dashboardへ移動します。", "ok");
+          location.href = qsUserIdUrl("/dashboard.html", userId);
+        } else {
+          setStatus("status: 未払いです。決済を完了してください。", "ng");
+        }
+      } catch (e) {
+        dbgErr(e);
+        setStatus(`status: error ${String(e?.message || e)}`, "ng");
+      } finally {
+        $checkPaidBtn.disabled = false;
+      }
+    });
+
+    $toDashboardBtn.addEventListener("click", () => {
+      location.href = qsUserIdUrl("/dashboard.html", userId);
+    });
+
+    setStatus(`status: user_id=${userId}`, "muted");
+  </script>
+</body>
+
+</html>
