@@ -665,7 +665,6 @@
     }
 
     main().catch((e) => {
-      document.getElementById("debug").textContent = String(e?.message || e);
       console.error(e);
     });
   </script>
