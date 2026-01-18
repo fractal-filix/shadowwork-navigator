@@ -19,8 +19,8 @@
 
   <pre id="log"></pre>
 
-  <script>
-    const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+  <script type="module">
+    import { API_BASE, apiPaid, getUserId, qsUserIdUrl } from "/lib/client.js";
     const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
     const $log = document.getElementById("log");
@@ -28,29 +28,6 @@
     const $debug = document.getElementById("debug-state");
     const $send = document.getElementById("send");
     const $next = document.getElementById("next");
-
-    const USER_ID = (() => {
-      const qs = new URLSearchParams(location.search);
-      const q = qs.get("user_id");
-      if (q && q.trim()) {
-        const v = q.trim();
-        localStorage.setItem("user_id", v);
-        return v;
-      }
-      const stored = localStorage.getItem("user_id");
-      return stored && stored.trim() ? stored.trim() : "test"; // dev fallback
-    })();
-
-    async function apiPaid() {
-      const res = await fetch(
-        `${API_BASE}/api/paid?user_id=${encodeURIComponent(USER_ID)}`,
-        { method: "GET" }
-      );
-      const data = await res.json().catch(() => ({}));
-      console.log("[paid]", data);
-      if (!res.ok || data.ok === false) throw new Error(data?.error || "paid check failed");
-      return !!data.paid;
-    }
 
     function appendLine(text) {
       if ($log.textContent) $log.textContent += `\n\n`;
@@ -133,13 +110,13 @@
       const state = await fetchState();
       if (!state.run) {
         // 未開始：appの責務外なので dashboard に戻す
-        location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+        location.href = qsUserIdUrl("/dashboard.html", USER_ID);
         return null;
       }
 
       // run完走済みなら app の責務外なので dashboard に戻す
       if (state.run?.status === "completed") {
-        location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+        location.href = qsUserIdUrl("/dashboard.html", USER_ID);
         return null;
       }
 
@@ -165,7 +142,7 @@
       // （API仕様：完走時に 400 + { ok:false, run:{status:"completed"}, thread:null } など）
       if (!res.ok || !json?.ok) {
         if (json?.run?.status === "completed") {
-          location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+          location.href = qsUserIdUrl("/dashboard.html", USER_ID);
           return null;
         }
         appendLine(`[ERROR] thread/start ${JSON.stringify(json)}`);
@@ -219,9 +196,9 @@
       __BOOT_PROMISE__ = (async () => {
         try {
           // paid gate: 未決済なら purchase に飛ばす
-          const isPaid = await apiPaid();
+          const isPaid = await apiPaid(USER_ID);
           if (!isPaid) {
-            location.href = `/purchase.html?user_id=${encodeURIComponent(USER_ID)}`;
+            location.href = qsUserIdUrl("/purchase.html", USER_ID);
             return;
           }
 
@@ -233,7 +210,7 @@
           console.log("[thread/state:init]", st);
 
           if (!st?.run || st?.run?.status === "completed") {
-            location.href = `/dashboard.html?user_id=${encodeURIComponent(USER_ID)}`;
+            location.href = qsUserIdUrl("/dashboard.html", USER_ID);
             return;
           }
 
