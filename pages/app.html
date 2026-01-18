@@ -41,6 +41,17 @@
       return stored && stored.trim() ? stored.trim() : "test"; // dev fallback
     })();
 
+    async function apiPaid() {
+      const res = await fetch(
+        `${API_BASE}/api/paid?user_id=${encodeURIComponent(USER_ID)}`,
+        { method: "GET" }
+      );
+      const data = await res.json().catch(() => ({}));
+      console.log("[paid]", data);
+      if (!res.ok || data.ok === false) throw new Error(data?.error || "paid check failed");
+      return !!data.paid;
+    }
+
     function appendLine(text) {
       if ($log.textContent) $log.textContent += `\n\n`;
       $log.textContent += text;
@@ -207,6 +218,13 @@
       if (__BOOT_PROMISE__) return __BOOT_PROMISE__;
       __BOOT_PROMISE__ = (async () => {
         try {
+          // paid gate: 未決済なら purchase に飛ばす
+          const isPaid = await apiPaid();
+          if (!isPaid) {
+            location.href = `/purchase.html?user_id=${encodeURIComponent(USER_ID)}`;
+            return;
+          }
+
           const res = await fetch(
             `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
             { method: "GET" }

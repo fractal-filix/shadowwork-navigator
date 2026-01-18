@@ -266,6 +266,16 @@
       return data;
     }
 
+    async function apiPaid(userId) {
+      const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
+      dbg("[api] paid ->", url);
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] paid <-", data);
+      if (!res.ok || data.ok === false) throw new Error(data?.error || "paid check failed");
+      return !!data.paid;
+    }
+
     async function apiRunStart(userId) {
       dbg("[api] run/start ->", userId);
       const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
@@ -409,6 +419,19 @@
 
       let userId = getUserId();
       userIdInput.value = userId;
+
+      try {
+        const isPaid = await apiPaid(userId);
+        if (!isPaid) {
+          location.href = qsUserIdUrl("/purchase.html", userId);
+          return;
+        }
+      } catch (e) {
+        // paidチェック自体が落ちた場合は、ひとまずヒント表示だけして止める
+        dbgErr("[paid] error", e);
+        hint.textContent = `エラー: ${String(e?.message || e)}`;
+        return;
+      }
 
       // history state
       let __runs = [];
