@@ -384,8 +384,8 @@
       return { label: "次へ進む", mode: "NEXT", hint: "active thread が無いので次の thread を作って app を開きます" };
     }
 
-    function openApp(userId) {
-      location.href = qsUserIdUrl("/app.html", userId);
+    function openApp() {
+      location.href = "/app.html";
     }
 
     function formatThreadLabel(t) {
@@ -624,22 +624,22 @@
             if (p.mode === "START") {
               await apiRunStart(userId);
               await apiThreadStart(userId);
-              openApp(userId);
+              openApp();
               return;
             }
             if (p.mode === "RESTART") {
               await apiRunRestart(userId);
               await apiThreadStart(userId);
-              openApp(userId);
+              openApp();
               return;
             }
             if (p.mode === "NEXT") {
               await apiThreadStart(userId);
-              openApp(userId);
+              openApp();
               return;
             }
             // RESUME
-            openApp(userId);
+            openApp();
           } catch (e) {
             dbgErr("[ui] primary error", e);
             hint.textContent = `エラー: ${String(e?.message || e)}`;
