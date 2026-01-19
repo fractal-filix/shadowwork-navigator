@@ -5,6 +5,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shadowwork Navigator - Dashboard</title>
+
+  <!-- Memberstack Install Code -->
+  <script src="https://static.memberstack.com/scripts/v1/memberstack.js" data-memberstack-app="pk_f4cf79925f5ae28222fa"
+    type="text/javascript">
+    </script>
+
   <style>
     body {
       font-family: system-ui, -apple-system, Segoe UI, sans-serif;
@@ -158,8 +164,8 @@
   <div class="card">
     <div class="row">
       <div>
-        <div class="muted">user_id</div>
-        <input id="userIdInput" placeholder="test / newtest など" />
+        <div class="muted">member / user_id</div>
+        <div id="memberLine" class="muted">checking...</div>
       </div>
       <div>
         <div class="muted">状態</div>
@@ -227,11 +233,40 @@
       API_BASE,
       dbg,
       dbgErr,
-      getUserId,
-      setUserId,
       qsUserIdUrl,
       apiPaid
     } from "/lib/client.js";
+
+    function saveUserId(userId) {
+      const v = (userId || "").trim();
+      if (!v) return;
+      localStorage.setItem("user_id", v);
+    }
+
+    async function getMemberAnyVersion() {
+      // Prefer v2 DOM package if present
+      try {
+        const dom = window.$memberstackDom;
+        if (dom && typeof dom.getCurrentMember === "function") {
+          const { data: member } = await dom.getCurrentMember();
+          return member || null;
+        }
+      } catch (e) {
+        dbgErr("[member] v2 getCurrentMember failed", e);
+      }
+
+      // Fallback to v1 API (MemberStack.onReady)
+      try {
+        if (window.MemberStack && window.MemberStack.onReady) {
+          const member = await window.MemberStack.onReady;
+          if (member && member.loggedIn) return member;
+          return null;
+        }
+      } catch (e) {
+        dbgErr("[member] v1 onReady failed", e);
+      }
+      return null;
+    }
 
     async function apiGetState(userId) {
       const url = `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(userId)}`;
@@ -241,7 +276,7 @@
       dbg("[api] thread/state <-", data);
       return data;
     }
-    
+
     async function apiRunStart(userId) {
       dbg("[api] run/start ->", userId);
       const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
@@ -370,7 +405,7 @@
     }
 
     async function main() {
-      const userIdInput = document.getElementById("userIdInput");
+      const memberLine = document.getElementById("memberLine");
       const statusLine = document.getElementById("statusLine");
       const primaryBtn = document.getElementById("primaryBtn");
       const hint = document.getElementById("hint");
@@ -383,13 +418,29 @@
       const historyStatus = document.getElementById("historyStatus");
       const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
 
-      let userId = getUserId();
-      userIdInput.value = userId;
+      // 1) login required
+      hint.textContent = "ログイン確認中...";
+      const member = await getMemberAnyVersion();
+      if (!member) {
+        // 未ログイン → LPへ（Memberstackのログイン導線に寄せる）
+        location.href = "/index.html";
+        return;
+      }
+
+      // 2) user_id = member.id
+      const userId = (member.id || member["id"] || "").trim();
+      if (!userId) {
+        hint.textContent = "ログイン情報は取得できましたが、member.id が取得できませんでした。";
+        return;
+      }
+      saveUserId(userId);
+      memberLine.innerHTML = `ログイン済み：<code>${userId}</code>`;
 
       try {
+        // 3) paid required
         const isPaid = await apiPaid(userId);
         if (!isPaid) {
-          location.href = qsUserIdUrl("/purchase.html", userId);
+          location.href = "/purchase.html";
           return;
         }
       } catch (e) {
@@ -403,12 +454,6 @@
       let __runs = [];
       let __selectedRunNo = null;
       let __selectedThreadId = null;
-
-      userIdInput.addEventListener("change", async () => {
-        setUserId(userIdInput.value);
-        userId = getUserId();
-        await refreshAll();
-      });
 
       function resetHistoryUI() {
         runSelect.innerHTML = `<option value="">(no runs)</option>`;
