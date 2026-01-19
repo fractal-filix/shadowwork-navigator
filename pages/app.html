@@ -4,6 +4,13 @@
 <head>
   <meta charset="utf-8" />
   <title>Shadowwork (Members)</title>
+
+  <!-- Memberstack Install Code -->
+  <script
+    src="https://static.memberstack.com/scripts/v1/memberstack.js"
+    data-memberstack-app="pk_f4cf79925f5ae28222fa"
+    type="text/javascript">
+  </script>
 </head>
 
 <body>
@@ -20,7 +27,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import { API_BASE, apiPaid, getUserId, qsUserIdUrl } from "/lib/client.js";
+    import { API_BASE, apiPaid, qsUserIdUrl } from "/lib/client.js";
     const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
     const $log = document.getElementById("log");
@@ -28,6 +35,39 @@
     const $debug = document.getElementById("debug-state");
     const $send = document.getElementById("send");
     const $next = document.getElementById("next");
+
+    function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
+
+    function saveUserId(userId) {
+      const v = (userId || "").trim();
+      if (!v) return;
+      localStorage.setItem("user_id", v);
+    }
+
+    async function getMemberAnyVersion() {
+      // Prefer v2 DOM package if present
+      try {
+        const dom = window.$memberstackDom;
+        if (dom && typeof dom.getCurrentMember === "function") {
+          const { data: member } = await dom.getCurrentMember();
+          return member || null;
+        }
+      } catch (e) {
+        dbgErr("[member] v2 getCurrentMember failed", e);
+      }
+
+      // Fallback to v1 API (MemberStack.onReady)
+      try {
+        if (window.MemberStack && window.MemberStack.onReady) {
+          const member = await window.MemberStack.onReady;
+          if (member && member.loggedIn) return member;
+          return null;
+        }
+      } catch (e) {
+        dbgErr("[member] v1 onReady failed", e);
+      }
+      return null;
+    }
 
     function appendLine(text) {
       if ($log.textContent) $log.textContent += `\n\n`;
@@ -110,13 +150,13 @@
       const state = await fetchState();
       if (!state.run) {
         // 未開始：appの責務外なので dashboard に戻す
-        location.href = qsUserIdUrl("/dashboard.html", USER_ID);
+        location.href = "/dashboard.html";
         return null;
       }
 
       // run完走済みなら app の責務外なので dashboard に戻す
       if (state.run?.status === "completed") {
-        location.href = qsUserIdUrl("/dashboard.html", USER_ID);
+        location.href = "/dashboard.html";
         return null;
       }
 
@@ -142,7 +182,7 @@
       // （API仕様：完走時に 400 + { ok:false, run:{status:"completed"}, thread:null } など）
       if (!res.ok || !json?.ok) {
         if (json?.run?.status === "completed") {
-          location.href = qsUserIdUrl("/dashboard.html", USER_ID);
+          location.href = "/dashboard.html";
           return null;
         }
         appendLine(`[ERROR] thread/start ${JSON.stringify(json)}`);
@@ -191,14 +231,35 @@
 
     let __BOOT_PROMISE__ = null;
 
+    // Memberstack login -> USER_ID 確定
+    let USER_ID = null;
+
+    async function ensureUserId() {
+      const member = await getMemberAnyVersion();
+      if (!member) {
+        location.href = "/index.html";
+        return null;
+      }
+      const id = (member.id || member["id"] || "").trim();
+      if (!id) {
+        $debug.textContent = "member.id が取得できませんでした";
+        return null;
+      }
+      saveUserId(id);
+      return id;
+    }
+
     async function boot() {
       if (__BOOT_PROMISE__) return __BOOT_PROMISE__;
       __BOOT_PROMISE__ = (async () => {
         try {
+          USER_ID = await ensureUserId();
+          if (!USER_ID) return;
+
           // paid gate: 未決済なら purchase に飛ばす
           const isPaid = await apiPaid(USER_ID);
           if (!isPaid) {
-            location.href = qsUserIdUrl("/purchase.html", USER_ID);
+            location.href = "/purchase.html";
             return;
           }
 
@@ -210,7 +271,7 @@
           console.log("[thread/state:init]", st);
 
           if (!st?.run || st?.run?.status === "completed") {
-            location.href = qsUserIdUrl("/dashboard.html", USER_ID);
+            location.href = "/dashboard.html";
             return;
           }
 
