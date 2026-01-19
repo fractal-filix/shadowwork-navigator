@@ -5,6 +5,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shadowwork Navigator - Purchase</title>
+
+  <!-- Memberstack Install Code -->
+  <script
+    src="https://static.memberstack.com/scripts/v1/memberstack.js"
+    data-memberstack-app="pk_f4cf79925f5ae28222fa"
+    type="text/javascript">
+  </script>
+
   <style>
     body {
       font-family: system-ui, -apple-system, Segoe UI, sans-serif;
@@ -45,13 +53,6 @@
       cursor: not-allowed;
     }
 
-    input {
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-      min-width: 220px;
-    }
-
     .ok {
       color: #0a7a2f;
       font-weight: 600;
@@ -67,6 +68,12 @@
       padding: 2px 6px;
       border-radius: 6px;
     }
+
+    .btn-lite {
+      background: #fff;
+      color: #111;
+      border: 1px solid #ccc;
+    }
   </style>
 </head>
 
@@ -74,10 +81,16 @@
   <h1>購入ページ（仮）</h1>
 
   <div class="card">
-    <div class="muted">user_id</div>
-    <div class="row">
-      <input id="userIdInput" placeholder="test / newtest など" />
-      <span class="muted">※決済と紐付ける識別子（いまは簡易）</span>
+    <div class="muted">ログイン状態</div>
+    <div id="memberBox" class="muted">checking...</div>
+    <div style="height:8px"></div>
+    <!-- data attribute で Memberstack のログインモーダルを開ける（環境により v1/v2 どちらでも動く想定） -->
+    <div class="row" id="loginRow" style="display:none;">
+      <a id="loginLink" data-ms-modal="login" href="#" class="btn-lite"
+        style="display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #ccc;text-decoration:none;color:#111;background:#fff;">
+        ログイン
+      </a>
+      <span class="muted">ログイン後に自動で支払い状況を確認します</span>
     </div>
   </div>
 
@@ -93,8 +106,8 @@
 
     <div class="row">
       <button id="goCheckoutBtn" type="button">決済ページへ</button>
-      <button id="checkPaidBtn" type="button" class="btn-lite">支払い確認</button>
-      <button id="toDashboardBtn" type="button" class="btn-lite">Dashboardへ</button>
+      <button id="checkPaidBtn" type="button" class="btn-lite" disabled>支払い確認</button>
+      <button id="toDashboardBtn" type="button" class="btn-lite" disabled>Dashboardへ</button>
     </div>
 
     <div style="height:10px"></div>
@@ -111,34 +124,18 @@
     function dbg(...args) { if (DEBUG_UI) console.log(...args); }
     function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
 
-    const $userIdInput = document.getElementById("userIdInput");
     const $status = document.getElementById("status");
     const $goCheckoutBtn = document.getElementById("goCheckoutBtn");
     const $checkPaidBtn = document.getElementById("checkPaidBtn");
     const $toDashboardBtn = document.getElementById("toDashboardBtn");
+    const $memberBox = document.getElementById("memberBox");
+    const $loginRow = document.getElementById("loginRow");
+    const $loginLink = document.getElementById("loginLink");
 
-    function getUserId() {
-      const qs = new URLSearchParams(location.search);
-      const q = qs.get("user_id");
-      if (q && q.trim()) {
-        const v = q.trim();
-        localStorage.setItem("user_id", v);
-        return v;
-      }
-      const stored = localStorage.getItem("user_id");
-      return stored && stored.trim() ? stored.trim() : "test";
-    }
-
-    function setUserId(v) {
-      const val = (v || "").trim();
-      if (!val) return;
-      localStorage.setItem("user_id", val);
-    }
-
-    function qsUserIdUrl(basePath, userId) {
-      const u = new URL(basePath, location.origin);
-      u.searchParams.set("user_id", userId);
-      return u.toString();
+    function saveUserId(userId) {
+      const v = (userId || "").trim();
+      if (!v) return;
+      localStorage.setItem("user_id", v);
     }
 
     async function apiPaid(userId) {
@@ -155,14 +152,78 @@
       $status.textContent = text;
     }
 
-    let userId = getUserId();
-    $userIdInput.value = userId;
+    async function getMemberAnyVersion() {
+      // Prefer v2 DOM package if present (some setups include both)
+      try {
+        const dom = window.$memberstackDom;
+        if (dom && typeof dom.getCurrentMember === "function") {
+          const { data: member } = await dom.getCurrentMember();
+          return member || null;
+        }
+      } catch (e) {
+        dbgErr("[member] v2 getCurrentMember failed", e);
+      }
 
-    $userIdInput.addEventListener("change", () => {
-      setUserId($userIdInput.value);
-      userId = getUserId();
-      setStatus(`status: user_id set to ${userId}`, "muted");
-    });
+      // Fallback to v1 API (MemberStack.onReady)
+      try {
+        if (window.MemberStack && window.MemberStack.onReady) {
+          const member = await window.MemberStack.onReady;
+          // v1: member.loggedIn true/false, member["id"] available when logged in
+          if (member && member.loggedIn) return member;
+          return null;
+        }
+      } catch (e) {
+        dbgErr("[member] v1 onReady failed", e);
+      }
+      return null;
+    }
+
+    function showLoggedOutUI() {
+      $memberBox.innerHTML = `未ログインです。<br>下の「ログイン」からログインしてください。`;
+      $loginRow.style.display = "flex";
+      $checkPaidBtn.disabled = true;
+      $toDashboardBtn.disabled = true;
+      // 自動でログインモーダルを開ける場合は開く（開けない環境でもボタンが出ているのでOK）
+      try { $loginLink.click(); } catch (_) { }
+    }
+
+    async function boot() {
+      setStatus("status: checking login...", "muted");
+
+      const member = await getMemberAnyVersion();
+      if (!member) {
+        setStatus("status: not logged in", "ng");
+        showLoggedOutUI();
+        return;
+      }
+
+      // v1 でも v2 でも member.id で取れる想定（v1 例では member['id']）
+      const memberId = (member.id || member["id"] || "").trim();
+      if (!memberId) {
+        setStatus("status: member id not found", "ng");
+        $memberBox.textContent = "ログイン情報は取得できましたが、member.id が取得できませんでした。";
+        return;
+      }
+
+      saveUserId(memberId);
+      $memberBox.innerHTML = `ログイン済み：<code>${memberId}</code>`;
+      $loginRow.style.display = "none";
+      $checkPaidBtn.disabled = false;
+      $toDashboardBtn.disabled = false;
+
+      setStatus("status: checking paid...", "muted");
+      const r = await apiPaid(memberId);
+      if (!r.ok) {
+        setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
+        return;
+      }
+      if (r.data?.paid === true) {
+        setStatus("status: 支払い済みです。Dashboardへ移動します。", "ok");
+        location.href = "/dashboard.html";
+        return;
+      }
+      setStatus("status: 未払いです。決済を完了してください。", "ng");
+    }
 
     $goCheckoutBtn.addEventListener("click", () => {
       // Payment Link等に user_id を渡したい場合はここでパラメータ付与
@@ -177,6 +238,12 @@
     $checkPaidBtn.addEventListener("click", async () => {
       $checkPaidBtn.disabled = true;
       try {
+        const userId = (localStorage.getItem("user_id") || "").trim();
+        if (!userId) {
+          setStatus("status: user_id が未確定です（ログインし直してください）", "ng");
+          showLoggedOutUI();
+          return;
+        }
         const r = await apiPaid(userId);
         if (!r.ok) {
           setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
@@ -184,7 +251,7 @@
         }
         if (r.data?.paid === true) {
           setStatus("status: 支払い確認OK。Dashboardへ移動します。", "ok");
-          location.href = qsUserIdUrl("/dashboard.html", userId);
+          location.href = "/dashboard.html";
         } else {
           setStatus("status: 未払いです。決済を完了してください。", "ng");
         }
@@ -197,10 +264,15 @@
     });
 
     $toDashboardBtn.addEventListener("click", () => {
-      location.href = qsUserIdUrl("/dashboard.html", userId);
+      location.href = "/dashboard.html";
     });
 
     setStatus(`status: user_id=${userId}`, "muted");
+    // start
+    boot().catch((e) => {
+      dbgErr(e);
+      setStatus(`status: boot error ${String(e?.message || e)}`, "ng");
+    });
   </script>
 </body>
 
