@@ -266,8 +266,23 @@
         }
       } catch (e) {
         dbgErr("[member] v1 onReady failed", e);
+        throw e;
       }
       return null;
+    }
+
+    async function getMemberWithRetry({ tries = 30, waitMs = 100 } = {}) {
+      let lastErr = null;
+      for (let i = 0; i < tries; i++) {
+        try {
+          const m = await getMemberAnyVersion();
+          if (m) return { member: m, error: null };
+        } catch (e) {
+          lastErr = e;
+        }
+        await new Promise(r => setTimeout(r, waitMs));
+      }
+      return { member: null, error: lastErr };
     }
 
     async function apiGetState(userId) {
@@ -421,11 +436,21 @@
       const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
 
       // 1) login required
-      hint.textContent = "ログイン確認中...";
-      const member = await getMemberAnyVersion();
+      window.addEventListener("unhandledrejection", (ev) => {
+        console.error("[unhandledrejection]", ev.reason);
+      });
+      window.addEventListener("error", (ev) => {
+        console.error("[window.error]", ev.error || ev.message);
+      });
+
+      hint.textContent = "ログイン確認中（最大3秒リトライ）...";
+      const { member, error } = await getMemberWithRetry({ tries: 30, waitMs: 100 });
       if (!member) {
-        // 未ログイン → LPへ（Memberstackのログイン導線に寄せる）
-        location.href = "/index.html";
+        const msg = error?.message ? String(error.message) : "(no detail)";
+        memberLine.textContent = "未ログイン または Memberstack 初期化失敗";
+        hint.textContent = `止めました（自動リダイレクト無効）。原因: ${msg}`;
+        // ここでは飛ばさず止める（原因が見えるように）
+        // location.href = "/index.html";
         return;
       }
 
