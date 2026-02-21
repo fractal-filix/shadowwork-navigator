@@ -1,0 +1,33 @@
+name = "filix-shadowwork-api"
+main = "src/worker.ts"
+compatibility_date = "2026-01-02"
+
+[vars]
+APP_ENV = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "filix_shadowwork_dev"
+database_id = "REPLACE_WITH_DEV_D1_DATABASE_ID"
+
+[env.staging.vars]
+APP_ENV = "staging"
+
+[env.staging]
+name = "filix-shadowwork-api-staging"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "filix_shadowwork_stg"
+database_id = "554a6e64-4dd1-4bc5-b13e-a9de3d43631b"
+
+[env.production.vars]
+APP_ENV = "production"
+
+[env.production]
+name = "filix-shadowwork-api"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "filix_shadowwork_prod"
+database_id = "f9e0c1ff-4582-4338-9b63-979df3826a42"

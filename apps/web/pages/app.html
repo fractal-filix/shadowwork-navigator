@@ -1,0 +1,382 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Shadowwork (Members)</title>
+
+  <!-- Memberstack webflow package -->
+  <script data-memberstack-app="app_cmjuxbbd901ui0stg5njo7vx7"
+    src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+</head>
+
+<body>
+  <h1>Shadowwork（会員ページ）</h1>
+
+  <div id="debug-state"></div>
+
+  <div>
+    <textarea id="msg" rows="4" cols="50" placeholder="ここに入力"></textarea><br />
+    <button id="send">送信</button>
+    <button id="next">次へ</button>
+  </div>
+
+  <pre id="log"></pre>
+
+  <script type="module">
+    import { API_BASE, apiPaid, qsUserIdUrl } from "/lib/client.js";
+    const DEBUG_UI = false; // true にするとUIにもJSONを出す
+
+    const $log = document.getElementById("log");
+    const $msg = document.getElementById("msg");
+    const $debug = document.getElementById("debug-state");
+    const $send = document.getElementById("send");
+    const $next = document.getElementById("next");
+
+    function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
+
+    function saveUserId(userId) {
+      const v = (userId || "").trim();
+      if (!v) return;
+      localStorage.setItem("user_id", v);
+    }
+
+    async function getMemberAnyVersion() {
+      // Prefer v2 DOM package if present
+      try {
+        const dom = window.$memberstackDom;
+        if (dom && typeof dom.getCurrentMember === "function") {
+          const { data: member } = await dom.getCurrentMember();
+          return member || null;
+        }
+      } catch (e) {
+        dbgErr("[member] v2 getCurrentMember failed", e);
+      }
+
+      // Fallback to v1 API (MemberStack.onReady)
+      try {
+        if (window.MemberStack && window.MemberStack.onReady) {
+          const member = await window.MemberStack.onReady;
+          if (member && member.loggedIn) return member;
+          return null;
+        }
+      } catch (e) {
+        dbgErr("[member] v1 onReady failed", e);
+      }
+      return null;
+    }
+
+    function appendLine(text) {
+      if ($log.textContent) $log.textContent += `\n\n`;
+      $log.textContent += text;
+    }
+
+    function clearLog() {
+      $log.textContent = "";
+    }
+
+    function renderDebug() {
+      const t = window.__STATE__?.thread;
+      if (!t) {
+        $debug.textContent = "thread: null";
+        return;
+      }
+      $debug.textContent =
+        `STEP: ${t.step} / ` +
+        `Q: ${t.question_no ?? "-"} / ` +
+        `S: ${t.session_no ?? "-"}`;
+    }
+
+    async function fetchState() {
+      const res = await fetch(
+        `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
+        { method: "GET" }
+      );
+      const json = await res.json();
+      console.log("[thread/state]", json);
+
+      window.__STATE__ = {
+        run: json.run ?? null,
+        thread: json.thread ?? null,
+        lastMessage: json.last_message ?? null,
+      };
+      renderDebug();
+      return window.__STATE__;
+    }
+
+    // ===== 追加：thread/messages =====
+
+    async function apiThreadMessages(threadId) {
+      const res = await fetch(
+        `${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(USER_ID)}&thread_id=${encodeURIComponent(threadId)}`,
+        { method: "GET" }
+      );
+      const data = await res.json().catch(() => ({}));
+      console.log("[thread/messages]", data);
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "thread/messages failed");
+      }
+      return data; // { ok, run, thread, messages }
+    }
+
+    function renderThreadMessagesToLog(messages) {
+      clearLog();
+      const msgs = messages || [];
+      if (msgs.length === 0) {
+        // 空でも「復元した」ことがわかるようにしたければここで案内を出してもOK
+        // appendLine("（このスレッドの会話はまだありません）");
+        return;
+      }
+      for (const m of msgs) {
+        const role = m.role || "?";
+        const content = m.content ?? "";
+        if (role === "user") appendLine(`You: ${content}`);
+        else if (role === "assistant") appendLine(`AI: ${content}`);
+        else appendLine(`${role}: ${content}`);
+      }
+    }
+
+    async function hydrateLogFromCurrentThread() {
+      const t = window.__STATE__?.thread;
+      if (!t?.id) return;
+      const msgData = await apiThreadMessages(t.id);
+      renderThreadMessagesToLog(msgData.messages || []);
+    }
+
+    async function ensureThread() {
+      const state = await fetchState();
+      if (!state.run) {
+        // 未開始：appの責務外なので dashboard に戻す
+        location.href = "/dashboard.html";
+        return null;
+      }
+
+      // run完走済みなら app の責務外なので dashboard に戻す
+      if (state.run?.status === "completed") {
+        location.href = "/dashboard.html";
+        return null;
+      }
+
+      // 既に thread があるなら、その thread の messages を復元して返す
+      if (state.thread) {
+        try {
+          await hydrateLogFromCurrentThread();
+        } catch (e) {
+          appendLine(`[ERROR] failed to load messages: ${String(e?.message || e)}`);
+        }
+        return state.thread;
+      }
+
+      // なければ作る
+      const res = await fetch(
+        `${API_BASE}/api/thread/start?user_id=${encodeURIComponent(USER_ID)}`,
+        { method: "POST" }
+      );
+      const json = await res.json();
+      console.log("[thread/start]", json);
+
+      // thread/start が完走を返すケース（例：S30後）は即 dashboard
+      // （API仕様：完走時に 400 + { ok:false, run:{status:"completed"}, thread:null } など）
+      if (!res.ok || !json?.ok) {
+        if (json?.run?.status === "completed") {
+          location.href = "/dashboard.html";
+          return null;
+        }
+        appendLine(`[ERROR] thread/start ${JSON.stringify(json)}`);
+        return null;
+      }
+
+      // start 後に state 再取得
+      await fetchState();
+
+      // 新規でも messages を読み込み（基本空だけど、整合性のため）
+      try {
+        await hydrateLogFromCurrentThread();
+      } catch (e) {
+        appendLine(`[ERROR] failed to load messages: ${String(e?.message || e)}`);
+      }
+
+      return window.__STATE__.thread;
+    }
+
+    async function closeThread() {
+      const res = await fetch(`${API_BASE}/api/thread/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: USER_ID }),
+      });
+      const json = await res.json().catch(() => ({}));
+      console.log("[thread/close]", json);
+      if (!res.ok || !json.ok) {
+        appendLine(`[ERROR] thread/close ${JSON.stringify(json)}`);
+        return false;
+      }
+      return true;
+    }
+
+    function shouldCloseFromResponse(data) {
+      if (data?.close_thread === true) return true;
+      if (data?.thread?.status === "completed") return true;
+      return false;
+    }
+
+    // === 起動時 ===
+    // NOTE: dashboard から「続きから再開」で遷移したとき、
+    // ブラウザの BFCache（戻る/進むキャッシュ）で app.html が復元されると、
+    // DOMContentLoaded が発火せず “過去の表示のまま” になることがある。
+    // そのため pageshow / visibilitychange でも必ず復元処理を走らせる。
+
+    let __BOOT_PROMISE__ = null;
+
+    // Memberstack login -> USER_ID 確定
+    let USER_ID = null;
+
+    async function ensureUserId() {
+      const member = await getMemberAnyVersion();
+      if (!member) {
+        location.href = "/index.html";
+        return null;
+      }
+      const id = (member.id || member["id"] || "").trim();
+      if (!id) {
+        $debug.textContent = "member.id が取得できませんでした";
+        return null;
+      }
+      saveUserId(id);
+      return id;
+    }
+
+    async function boot() {
+      if (__BOOT_PROMISE__) return __BOOT_PROMISE__;
+      __BOOT_PROMISE__ = (async () => {
+        try {
+          USER_ID = await ensureUserId();
+          if (!USER_ID) return;
+
+          // paid gate: 未決済なら purchase に飛ばす
+          const isPaid = await apiPaid(USER_ID);
+          if (!isPaid) {
+            location.href = "/purchase.html";
+            return;
+          }
+
+          const res = await fetch(
+            `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
+            { method: "GET" }
+          );
+          const st = await res.json();
+          console.log("[thread/state:init]", st);
+
+          if (!st?.run || st?.run?.status === "completed") {
+            location.href = "/dashboard.html";
+            return;
+          }
+
+          // run active のときだけスレッド確保へ（ここで復元も走る）
+          await ensureThread();
+        } catch (err) {
+          console.error("[init] error", err);
+          $debug.textContent = "init error (console見て)";
+        } finally {
+          __BOOT_PROMISE__ = null;
+        }
+      })();
+      return __BOOT_PROMISE__;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      boot();
+    });
+
+    // BFCache 復元対策
+    window.addEventListener("pageshow", () => {
+      boot();
+    });
+
+    // タブ復帰対策
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") boot();
+    });
+
+    // === 次へ（手動で thread close）===
+    $next.addEventListener("click", async () => {
+      $next.disabled = true;
+      try {
+        appendLine("---- このスレッドを終了します ----");
+        const ok = await closeThread();
+        if (!ok) return;
+
+        // 1thread=1page なので、ログをクリアして新スレッドに切り替え
+        clearLog();
+        await ensureThread(); // ←新スレッド作成 & そのスレッドのmessages復元（基本空）
+        appendLine("（新しいスレッドを開始しました）");
+        renderDebug();
+      } catch (err) {
+        console.error("[thread/close] error", err);
+        appendLine(`[error] ${String(err)}`);
+      } finally {
+        $next.disabled = false;
+      }
+    });
+
+    // === 送信 ===
+    $send.addEventListener("click", async () => {
+      const message = $msg.value.trim();
+      if (!message) return;
+
+      $send.disabled = true;
+
+      try {
+        appendLine(`You: ${message}`);
+
+        const res = await fetch(`${API_BASE}/api/thread/message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: USER_ID, message }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        console.log("[thread/message]", data);
+        if (DEBUG_UI) {
+          appendLine(`[thread/message] ${JSON.stringify(data)}`);
+        }
+
+        if (!res.ok || !data.ok) {
+          appendLine(`[ERROR] ${JSON.stringify(data)}`);
+          return;
+        }
+
+        // AIの返答を会話形式で表示
+        appendLine(`AI: ${data.reply ?? "(no reply)"}`);
+
+        if (!window.__STATE__) window.__STATE__ = {};
+        if (data.thread) {
+          window.__STATE__ = window.__STATE__ ?? {};
+          window.__STATE__.thread = data.thread;
+          renderDebug();
+        }
+
+        // close_thread なら thread を閉じて次スレッドへ
+        if (shouldCloseFromResponse(data)) {
+          appendLine("---- このスレッドを終了します ----");
+          const ok = await closeThread();
+          if (ok) {
+            clearLog();
+            await ensureThread();
+            appendLine("（新しいスレッドを開始しました）");
+            renderDebug();
+          }
+        }
+
+        $msg.value = "";
+      } catch (err) {
+        console.error("[thread/message] error", err);
+        appendLine(`[error] ${String(err)}`);
+      } finally {
+        $send.disabled = false;
+      }
+    });
+  </script>
+</body>
+
+</html>

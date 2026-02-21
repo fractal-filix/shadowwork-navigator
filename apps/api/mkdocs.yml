@@ -1,0 +1,27 @@
+site_name: filix-shadowwork-api documents
+docs_dir: documents/基本設計書
+site_dir: site
+
+theme:
+  name: material
+
+markdown_extensions:
+  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - javascripts/mermaid.js
+
+nav:
+  - Home: index.md
+  - 概要: 00_概要.md
+  - アーキテクチャ: 10_アーキテクチャ.md
+  - API仕様: 20_API仕様.md
+  - データモデル: 30_データモデル.md
+  - 課金と利用権限: 40_課金と利用権限.md
+  - セキュリティ: 50_セキュリティ.md
+  - 利用制限と運用ポリシー: 60_利用制限と運用ポリシー.md

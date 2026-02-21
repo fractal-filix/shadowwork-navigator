@@ -1,0 +1,10 @@
+{
+  "name": "@shadowwork-navigator/web",
+  "private": true,
+  "scripts": {
+    "build": "echo \"skip: web has no node build\"",
+    "typecheck": "echo \"skip: web has no typecheck\"",
+    "lint": "echo \"skip: web has no lint\"",
+    "dev": "echo \"skip: use Cloudflare Pages dev workflow\""
+  }
+}

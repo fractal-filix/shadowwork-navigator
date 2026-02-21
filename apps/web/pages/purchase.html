@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shadowwork Navigator - Purchase</title>
+
+  <!-- Memberstack webflow package -->
+  <script data-memberstack-app="app_cmjuxbbd901ui0stg5njo7vx7"
+    src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      max-width: 720px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .muted {
+      color: #666;
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    .ok {
+      color: #0a7a2f;
+      font-weight: 600;
+    }
+
+    .ng {
+      color: #b00020;
+      font-weight: 600;
+    }
+
+    code {
+      background: #f6f6f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    .btn-lite {
+      background: #fff;
+      color: #111;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>購入ページ（仮）</h1>
+
+  <div class="card">
+    <div class="muted">ログイン状態</div>
+    <div id="memberBox" class="muted">checking...</div>
+    <div style="height:8px"></div>
+    <!-- data attribute で Memberstack のログインモーダルを開ける（環境により v1/v2 どちらでも動く想定） -->
+    <div class="row" id="loginRow" style="display:none;">
+      <a id="loginLink" data-ms-modal="login" href="#" class="btn-lite"
+        style="display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #ccc;text-decoration:none;color:#111;background:#fff;">
+        ログイン
+      </a>
+      <span class="muted">ログイン後に自動で支払い状況を確認します</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">手順</h2>
+    <ol>
+      <li>「決済ページへ」からStripeへ進む</li>
+      <li>支払い後、このページに戻って「支払い確認」を押す</li>
+      <li>支払い済みなら dashboard に進めます</li>
+    </ol>
+
+    <div style="height:8px"></div>
+
+    <div class="row">
+      <button id="goCheckoutBtn" type="button">決済ページへ</button>
+      <button id="checkPaidBtn" type="button" class="btn-lite" disabled>支払い確認</button>
+      <button id="toDashboardBtn" type="button" class="btn-lite" disabled>Dashboardへ</button>
+    </div>
+
+    <div style="height:10px"></div>
+    <div id="status" class="muted">status: -</div>
+  </div>
+
+  <script>
+    const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+    const DEBUG_UI = false;
+
+    // Checkout Session はAPIで生成してURLを受け取る（固定URLは不要）
+
+    function dbg(...args) { if (DEBUG_UI) console.log(...args); }
+    function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
+
+    const $status = document.getElementById("status");
+    const $goCheckoutBtn = document.getElementById("goCheckoutBtn");
+    const $checkPaidBtn = document.getElementById("checkPaidBtn");
+    const $toDashboardBtn = document.getElementById("toDashboardBtn");
+    const $memberBox = document.getElementById("memberBox");
+    const $loginRow = document.getElementById("loginRow");
+    const $loginLink = document.getElementById("loginLink");
+
+    function saveUserId(userId) {
+      const v = (userId || "").trim();
+      if (!v) return;
+      localStorage.setItem("user_id", v);
+    }
+
+    async function apiPaid(userId) {
+      const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
+      dbg("[api] paid ->", url);
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] paid <-", data);
+      return { ok: res.ok, data };
+    }
+
+    async function apiCreateCheckoutSession(memberId) {
+      const url = `${API_BASE}/api/checkout/session`;
+      dbg("[api] checkout.session ->", url, memberId);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] checkout.session <-", data);
+      return { ok: res.ok, data };
+    }
+
+    function setStatus(text, kind) {
+      $status.className = kind === "ok" ? "ok" : kind === "ng" ? "ng" : "muted";
+      $status.textContent = text;
+    }
+
+    async function getMemberAnyVersion() {
+      // Prefer v2 DOM package if present (some setups include both)
+      try {
+        const dom = window.$memberstackDom;
+        if (dom && typeof dom.getCurrentMember === "function") {
+          const { data: member } = await dom.getCurrentMember();
+          return member || null;
+        }
+      } catch (e) {
+        dbgErr("[member] v2 getCurrentMember failed", e);
+      }
+
+      // Fallback to v1 API (MemberStack.onReady)
+      try {
+        if (window.MemberStack && window.MemberStack.onReady) {
+          const member = await window.MemberStack.onReady;
+          // v1: member.loggedIn true/false, member["id"] available when logged in
+          if (member && member.loggedIn) return member;
+          return null;
+        }
+      } catch (e) {
+        dbgErr("[member] v1 onReady failed", e);
+      }
+      return null;
+    }
+
+    function showLoggedOutUI() {
+      $memberBox.innerHTML = `未ログインです。<br>下の「ログイン」からログインしてください。`;
+      $loginRow.style.display = "flex";
+      $checkPaidBtn.disabled = true;
+      $toDashboardBtn.disabled = true;
+      // 自動でログインモーダルを開ける場合は開く（開けない環境でもボタンが出ているのでOK）
+      try { $loginLink.click(); } catch (_) { }
+    }
+
+    async function boot() {
+      setStatus("status: checking login...", "muted");
+
+      const member = await getMemberAnyVersion();
+      if (!member) {
+        setStatus("status: not logged in", "ng");
+        showLoggedOutUI();
+        return;
+      }
+
+      // v1 でも v2 でも member.id で取れる想定（v1 例では member['id']）
+      const memberId = (member.id || member["id"] || "").trim();
+      if (!memberId) {
+        setStatus("status: member id not found", "ng");
+        $memberBox.textContent = "ログイン情報は取得できましたが、member.id が取得できませんでした。";
+        return;
+      }
+
+      saveUserId(memberId);
+      $memberBox.innerHTML = `ログイン済み：<code>${memberId}</code>`;
+      $loginRow.style.display = "none";
+      $checkPaidBtn.disabled = false;
+      $toDashboardBtn.disabled = false;
+
+      setStatus("status: checking paid...", "muted");
+      const r = await apiPaid(memberId);
+      if (!r.ok) {
+        setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
+        return;
+      }
+      if (r.data?.paid === true) {
+        setStatus("status: 支払い済みです。Dashboardへ移動します。", "ok");
+        location.href = "/dashboard.html";
+        return;
+      }
+      setStatus("status: 未払いです。決済を完了してください。", "ng");
+    }
+
+    $goCheckoutBtn.addEventListener("click", () => {
+      // member_id は localStorage に保存済み（boot()でsaveUserIdしてる）
+      (async () => {
+        const memberId = (localStorage.getItem("user_id") || "").trim();
+        if (!memberId) {
+          setStatus("status: user_id が未確定です（ログインし直してください）", "ng");
+          showLoggedOutUI();
+          return;
+        }
+        setStatus("status: checkout session を作成中...", "muted");
+        const r = await apiCreateCheckoutSession(memberId);
+        if (!r.ok || !r.data?.url) {
+          setStatus(`status: checkout session failed: ${JSON.stringify(r.data)}`, "ng");
+          return;
+        }
+        location.href = r.data.url;
+      })().catch((e) => {
+        dbgErr(e);
+        setStatus(`status: checkout error ${String(e?.message || e)}`, "ng");
+      });
+    });
+
+    $checkPaidBtn.addEventListener("click", async () => {
+      $checkPaidBtn.disabled = true;
+      try {
+        const userId = (localStorage.getItem("user_id") || "").trim();
+        if (!userId) {
+          setStatus("status: user_id が未確定です（ログインし直してください）", "ng");
+          showLoggedOutUI();
+          return;
+        }
+        const r = await apiPaid(userId);
+        if (!r.ok) {
+          setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
+          return;
+        }
+        if (r.data?.paid === true) {
+          setStatus("status: 支払い確認OK。Dashboardへ移動します。", "ok");
+          location.href = "/dashboard.html";
+        } else {
+          setStatus("status: 未払いです。決済を完了してください。", "ng");
+        }
+      } catch (e) {
+        dbgErr(e);
+        setStatus(`status: error ${String(e?.message || e)}`, "ng");
+      } finally {
+        $checkPaidBtn.disabled = false;
+      }
+    });
+
+    $toDashboardBtn.addEventListener("click", () => {
+      location.href = "/dashboard.html";
+    });
+
+    // ここは userId 未定義で落ちるので削除（必要なら localStorage から表示する）
+    // setStatus(`status: user_id=${localStorage.getItem("user_id") || "-"}`, "muted");
+    // start
+    boot().catch((e) => {
+      dbgErr(e);
+      setStatus(`status: boot error ${String(e?.message || e)}`, "ng");
+    });
+  </script>
+</body>
+
+</html>

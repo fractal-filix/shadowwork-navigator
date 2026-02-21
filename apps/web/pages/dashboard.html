@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shadowwork Navigator - Dashboard</title>
+
+  <!-- Memberstack webflow package -->
+  <script data-memberstack-app="app_cmjuxbbd901ui0stg5njo7vx7"
+    src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      max-width: 880px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .muted {
+      color: #666;
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    button[disabled] {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    input,
+    select {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      min-width: 220px;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+
+    code {
+      background: #f6f6f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    pre {
+      background: #0b0b0b;
+      color: #d9d9d9;
+      padding: 12px;
+      border-radius: 12px;
+      overflow: auto;
+    }
+
+    /* history */
+    .history-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 900px) {
+      .history-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .list li {
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 10px;
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      background: #fff;
+    }
+
+    .list .meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #ddd;
+      font-size: 12px;
+      color: #333;
+      background: #fafafa;
+      width: fit-content;
+    }
+
+    .btn-lite {
+      background: #fff;
+      color: #111;
+      border: 1px solid #bbb;
+    }
+
+    .chat {
+      border: 1px solid #eee;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fafafa;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      min-height: 120px;
+    }
+
+    .chat .line {
+      margin: 0 0 10px;
+      padding: 10px;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid #eee;
+    }
+
+    .chat .line .who {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Dashboard</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">member / user_id</div>
+        <div id="memberLine" class="muted">checking...</div>
+      </div>
+      <div>
+        <div class="muted">状態</div>
+        <div id="statusLine">loading...</div>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+
+    <div class="row" id="loginRow" style="display:none;">
+      <a id="loginLink" data-ms-modal="login" href="#"
+        style="display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #ccc;text-decoration:none;color:#111;background:#fff;">
+        ログイン
+      </a>
+      <span class="muted">ログイン後にこのページをリロードしてください</span>
+    </div>
+
+    <div class="row">
+      <button id="primaryBtn" disabled>...</button>
+      <span class="muted" id="hint"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>全体一覧（表示のみ）</h2>
+    <div class="muted">※ここはクリック不要。進捗の全体像だけ見せる。</div>
+
+    <h3>Step 1（5つの質問）</h3>
+    <ul id="step1List"></ul>
+
+    <h3>Step 2（30セッション）</h3>
+    <ul id="step2List"></ul>
+  </div>
+
+  <!-- 履歴ビューア -->
+  <div class="card">
+    <h2>履歴</h2>
+    <div class="muted">過去run・過去threadの会話を閲覧できます（表示のみ）。</div>
+
+    <div style="height:12px"></div>
+
+    <div class="row">
+      <div>
+        <div class="muted">run</div>
+        <select id="runSelect">
+          <option>loading...</option>
+        </select>
+      </div>
+      <div class="muted" id="historyStatus"></div>
+    </div>
+
+    <div style="height:12px"></div>
+
+    <div class="history-grid">
+      <div>
+        <div class="row" style="justify-content: space-between;">
+          <h3 style="margin:0;">threads</h3>
+          <button id="refreshHistoryBtn" class="btn-lite" type="button">履歴を更新</button>
+        </div>
+        <ul id="threadsList" class="list"></ul>
+      </div>
+
+      <div>
+        <h3 style="margin:0;">messages</h3>
+        <div class="muted" id="messagesHeader" style="margin:8px 0;">thread を選択してください</div>
+        <div id="messagesView" class="chat"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      API_BASE,
+      dbg,
+      dbgErr,
+      qsUserIdUrl,
+      apiPaid
+    } from "/lib/client.js";
+
+    function saveUserId(userId) {
+      const v = (userId || "").trim();
+      if (!v) return;
+      localStorage.setItem("user_id", v);
+    }
+
+    async function getMemberAnyVersion() {
+      // Prefer v2 DOM package if present
+      try {
+        const dom = window.$memberstackDom;
+        if (dom && typeof dom.getCurrentMember === "function") {
+          const { data: member } = await dom.getCurrentMember();
+          return member || null;
+        }
+      } catch (e) {
+        dbgErr("[member] v2 getCurrentMember failed", e);
+      }
+
+      // Fallback to v1 API (MemberStack.onReady)
+      try {
+        if (window.MemberStack && window.MemberStack.onReady) {
+          const member = await window.MemberStack.onReady;
+          if (member && member.loggedIn) return member;
+          return null;
+        }
+      } catch (e) {
+        dbgErr("[member] v1 onReady failed", e);
+        throw e;
+      }
+      return null;
+    }
+
+    async function getMemberWithRetry({ tries = 30, waitMs = 100 } = {}) {
+      let lastErr = null;
+      for (let i = 0; i < tries; i++) {
+        try {
+          const m = await getMemberAnyVersion();
+          if (m) return { member: m, error: null };
+        } catch (e) {
+          lastErr = e;
+        }
+        await new Promise(r => setTimeout(r, waitMs));
+      }
+      return { member: null, error: lastErr };
+    }
+
+    async function apiGetState(userId) {
+      const url = `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(userId)}`;
+      dbg("[api] thread/state ->", url);
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] thread/state <-", data);
+      return data;
+    }
+
+    async function apiRunStart(userId) {
+      dbg("[api] run/start ->", userId);
+      const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] run/start <-", data);
+      if (!res.ok) throw new Error(data?.error || "run/start failed");
+      return data;
+    }
+
+    async function apiRunRestart(userId) {
+      dbg("[api] run/restart ->", userId);
+      const res = await fetch(`${API_BASE}/api/run/restart?user_id=${encodeURIComponent(userId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] run/restart <-", data);
+      if (!res.ok) throw new Error(data?.error || "run/restart failed");
+      return data;
+    }
+
+    async function apiThreadStart(userId) {
+      dbg("[api] thread/start ->", userId);
+      const res = await fetch(`${API_BASE}/api/thread/start?user_id=${encodeURIComponent(userId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => ({}));
+      dbg("[api] thread/start <-", data);
+      if (!res.ok) throw new Error(data?.error || "thread/start failed");
+      return data;
+    }
+
+    // --- history APIs ---
+    async function apiRunsList(userId) {
+      dbg("[history] runs/list ->", userId);
+      const res = await fetch(`${API_BASE}/api/runs/list?user_id=${encodeURIComponent(userId)}`);
+      const data = await res.json().catch(() => ({}));
+      dbg("[history] runs/list <-", data);
+      if (!res.ok) throw new Error(data?.error || "runs/list failed");
+      return data; // { ok, runs: [...] }
+    }
+
+    async function apiThreadsList(userId, runNo) {
+      dbg("[history] threads/list ->", { userId, runNo });
+      const res = await fetch(`${API_BASE}/api/threads/list?user_id=${encodeURIComponent(userId)}&run_no=${encodeURIComponent(runNo)}`);
+      const data = await res.json().catch(() => ({}));
+      dbg("[history] threads/list <-", data);
+      if (!res.ok) throw new Error(data?.error || "threads/list failed");
+      return data; // { ok, run, threads: [...] }
+    }
+
+    async function apiThreadMessages(userId, threadId) {
+      dbg("[history] thread/messages ->", { userId, threadId });
+      const res = await fetch(`${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(userId)}&thread_id=${encodeURIComponent(threadId)}`);
+      const data = await res.json().catch(() => ({}));
+      dbg("[history] thread/messages <-", data);
+      if (!res.ok) throw new Error(data?.error || "thread/messages failed");
+      return data; // { ok, run, thread, messages: [...] }
+    }
+
+    function renderLists(current) {
+      const step1 = document.getElementById("step1List");
+      const step2 = document.getElementById("step2List");
+      step1.innerHTML = "";
+      step2.innerHTML = "";
+
+      for (let i = 1; i <= 5; i++) {
+        const li = document.createElement("li");
+        li.textContent = `Q${i}`;
+        if (current?.step === 1 && current?.question_no === i) li.innerHTML += " <code>now</code>";
+        step1.appendChild(li);
+      }
+
+      for (let i = 1; i <= 30; i++) {
+        const li = document.createElement("li");
+        li.textContent = `Session ${i}`;
+        if (current?.step === 2 && current?.session_no === i) li.innerHTML += " <code>now</code>";
+        step2.appendChild(li);
+      }
+    }
+
+    function decidePrimary(state) {
+      // state: { ok, run, thread, last_message }
+      const run = state?.run;
+      const thread = state?.thread;
+
+      if (!run) {
+        return { label: "開始する", mode: "START", hint: "未開始：run を作って最初の thread を開きます" };
+      }
+      if (run.status === "completed") {
+        return { label: "最初からやり直す", mode: "RESTART", hint: "完走済：restart して最初の thread を開きます" };
+      }
+      // run active
+      if (thread && thread.status === "active") {
+        return { label: "続きから再開", mode: "RESUME", hint: "現在の active thread を app で開きます" };
+      }
+      // run active, thread none
+      return { label: "次へ進む", mode: "NEXT", hint: "active thread が無いので次の thread を作って app を開きます" };
+    }
+
+    function openApp() {
+      location.href = "/app.html";
+    }
+
+    function formatThreadLabel(t) {
+      if (!t) return "";
+      if (Number(t.step) === 1) return `Step1 / Q${t.question_no}`;
+      if (Number(t.step) === 2) return `Step2 / Session ${t.session_no}`;
+      return `Step${t.step}`;
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    async function main() {
+      const memberLine = document.getElementById("memberLine");
+      const statusLine = document.getElementById("statusLine");
+      const primaryBtn = document.getElementById("primaryBtn");
+      const hint = document.getElementById("hint");
+      const loginRow = document.getElementById("loginRow");
+      const loginLink = document.getElementById("loginLink");
+
+      // history dom
+      const runSelect = document.getElementById("runSelect");
+      const threadsList = document.getElementById("threadsList");
+      const messagesView = document.getElementById("messagesView");
+      const messagesHeader = document.getElementById("messagesHeader");
+      const historyStatus = document.getElementById("historyStatus");
+      const refreshHistoryBtn = document.getElementById("refreshHistoryBtn");
+
+      // 1) login required
+      window.addEventListener("unhandledrejection", (ev) => {
+        console.error("[unhandledrejection]", ev.reason);
+      });
+      window.addEventListener("error", (ev) => {
+        console.error("[window.error]", ev.error || ev.message);
+      });
+
+      hint.textContent = "ログイン確認中（最大3秒リトライ）...";
+      const { member, error } = await getMemberWithRetry({ tries: 30, waitMs: 100 });
+      if (!member) {
+        const msg = error?.message ? String(error.message) : "(no detail)";
+        memberLine.textContent = "未ログイン または Memberstack 初期化失敗";
+        hint.textContent = `止めました（自動リダイレクト無効）。原因: ${msg}`;
+        loginRow.style.display = "flex";
+        try { loginLink.click(); } catch (_) {}
+        // ここでは飛ばさず止める（原因が見えるように）
+        // location.href = "/index.html";
+        return;
+      }
+
+      // 2) user_id = member.id
+      const userId = (member.id || member["id"] || "").trim();
+      if (!userId) {
+        hint.textContent = "ログイン情報は取得できましたが、member.id が取得できませんでした。";
+        return;
+      }
+      saveUserId(userId);
+      memberLine.innerHTML = `ログイン済み：<code>${userId}</code>`;
+
+      try {
+        // 3) paid required
+        const isPaid = await apiPaid(userId);
+        if (!isPaid) {
+          location.href = "/purchase.html";
+          return;
+        }
+      } catch (e) {
+        // paidチェック自体が落ちた場合は、ひとまずヒント表示だけして止める
+        dbgErr("[paid] error", e);
+        hint.textContent = `エラー: ${String(e?.message || e)}`;
+        return;
+      }
+
+      // history state
+      let __runs = [];
+      let __selectedRunNo = null;
+      let __selectedThreadId = null;
+
+      function resetHistoryUI() {
+        runSelect.innerHTML = `<option value="">(no runs)</option>`;
+        threadsList.innerHTML = "";
+        messagesHeader.textContent = "thread を選択してください";
+        messagesView.innerHTML = "";
+        historyStatus.textContent = "";
+        __runs = [];
+        __selectedRunNo = null;
+        __selectedThreadId = null;
+      }
+
+      function renderMessages(messages) {
+        if (!messages || messages.length === 0) {
+          messagesView.innerHTML = `<div class="muted">（messages がありません）</div>`;
+          return;
+        }
+        messagesView.innerHTML = messages.map(m => {
+          const who = escapeHtml(m.role || "?");
+          const seq = m.seq != null ? `#${m.seq}` : "";
+          const when = m.created_at ? escapeHtml(m.created_at) : "";
+          const content = escapeHtml(m.content || "");
+          return `
+            <div class="line">
+              <div class="who">${who} ${seq} <span class="muted">${when}</span></div>
+              <div>${content}</div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      async function loadRunsAndSelect(defaultRunNo) {
+        historyStatus.textContent = "runs 読み込み中...";
+        dbg("[history] loadRunsAndSelect", { userId, defaultRunNo });
+        const data = await apiRunsList(userId);
+        __runs = (data?.runs ?? [])
+          .slice()
+          .sort((a, b) => Number(b.run_no) - Number(a.run_no));
+        dbg("[history] runs count", __runs.length);
+
+        runSelect.innerHTML = "";
+        if (__runs.length === 0) {
+          runSelect.innerHTML = `<option value="">(no runs)</option>`;
+          __selectedRunNo = null;
+          historyStatus.textContent = "run がありません（未実施）";
+          return;
+        }
+
+        for (const r of __runs) {
+          const opt = document.createElement("option");
+          opt.value = String(r.run_no);
+          opt.textContent = `run #${r.run_no} (${r.status})`;
+          runSelect.appendChild(opt);
+        }
+
+        // 既定：state の run_no があればそれ、なければ最新（配列先頭を想定）
+        const fallback = String(__runs[0].run_no);
+        __selectedRunNo = defaultRunNo != null ? String(defaultRunNo) : fallback;
+
+        // 存在しない run_no を指定された場合は fallback
+        if (!__runs.some(r => String(r.run_no) === String(__selectedRunNo))) {
+          __selectedRunNo = fallback;
+        }
+
+        runSelect.value = __selectedRunNo;
+        historyStatus.textContent = "";
+      }
+
+      async function loadThreadsForSelectedRun() {
+        threadsList.innerHTML = "";
+        messagesHeader.textContent = "thread を選択してください";
+        messagesView.innerHTML = "";
+        __selectedThreadId = null;
+
+        if (!__selectedRunNo) {
+          historyStatus.textContent = "run を選択してください";
+          return;
+        }
+
+        historyStatus.textContent = `threads 読み込み中 (run #${__selectedRunNo})...`;
+        dbg("[history] loadThreadsForSelectedRun", { userId, runNo: __selectedRunNo });
+        const data = await apiThreadsList(userId, __selectedRunNo);
+        const threads = data?.threads ?? [];
+        dbg("[history] threads count", threads.length);
+
+        historyStatus.textContent = `run #${__selectedRunNo}: threads=${threads.length}`;
+
+        if (threads.length === 0) {
+          threadsList.innerHTML = `<li><div class="muted">（threads がありません）</div></li>`;
+          return;
+        }
+
+        for (const t of threads) {
+          const li = document.createElement("li");
+
+          const left = document.createElement("div");
+          left.className = "meta";
+
+          const title = document.createElement("div");
+          title.textContent = formatThreadLabel(t);
+
+          const sub = document.createElement("div");
+          sub.innerHTML = `<span class="pill">${escapeHtml(t.status)}</span> <span class="muted">${escapeHtml(t.created_at || "")}</span>`;
+
+          left.appendChild(title);
+          left.appendChild(sub);
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-lite";
+          btn.textContent = "履歴を見る";
+          btn.onclick = async () => {
+            try {
+              btn.disabled = true;
+              historyStatus.textContent = "messages 読み込み中...";
+              __selectedThreadId = t.id;
+              dbg("[history] click thread", t.id);
+
+              const msgData = await apiThreadMessages(userId, t.id);
+              const threadLabel = formatThreadLabel(msgData?.thread || t);
+              messagesHeader.textContent = `${threadLabel} / thread_id=${t.id}`;
+              renderMessages(msgData?.messages ?? []);
+
+              historyStatus.textContent = "";
+            } catch (e) {
+              dbgErr("[history] messages error", e);
+              historyStatus.textContent = `エラー: ${String(e?.message || e)}`;
+            } finally {
+              btn.disabled = false;
+            }
+          };
+
+          li.appendChild(left);
+          li.appendChild(btn);
+          threadsList.appendChild(li);
+        }
+      }
+
+      async function refreshPrimaryArea() {
+        primaryBtn.disabled = true;
+        statusLine.textContent = "loading...";
+        hint.textContent = "";
+
+        const state = await apiGetState(userId);
+
+        const run = state?.run;
+        const thread = state?.thread;
+
+        statusLine.textContent =
+          !run ? "run: null" :
+            `run: #${run.run_no} (${run.status}) / thread: ` +
+            (thread ? `step=${thread.step} q=${thread.question_no ?? "-"} s=${thread.session_no ?? "-"} (${thread.status})` : "null");
+
+        renderLists(thread);
+
+        const p = decidePrimary(state);
+        primaryBtn.textContent = p.label;
+        hint.textContent = p.hint;
+
+        primaryBtn.disabled = false;
+
+        primaryBtn.onclick = async () => {
+          primaryBtn.disabled = true;
+          hint.textContent = "処理中...";
+          dbg("[ui] primary click", { mode: p.mode, userId });
+
+          try {
+            if (p.mode === "START") {
+              await apiRunStart(userId);
+              await apiThreadStart(userId);
+              openApp();
+              return;
+            }
+            if (p.mode === "RESTART") {
+              await apiRunRestart(userId);
+              await apiThreadStart(userId);
+              openApp();
+              return;
+            }
+            if (p.mode === "NEXT") {
+              await apiThreadStart(userId);
+              openApp();
+              return;
+            }
+            // RESUME
+            openApp();
+          } catch (e) {
+            dbgErr("[ui] primary error", e);
+            hint.textContent = `エラー: ${String(e?.message || e)}`;
+            primaryBtn.disabled = false;
+          }
+        };
+
+        return state;
+      }
+
+      async function refreshHistoryArea(defaultRunNoFromState) {
+        resetHistoryUI();
+        try {
+          await loadRunsAndSelect(defaultRunNoFromState);
+          await loadThreadsForSelectedRun();
+        } catch (e) {
+          historyStatus.textContent = `エラー: ${String(e?.message || e)}`;
+        }
+      }
+
+      async function refreshAll() {
+        dbg("[ui] refreshAll", { userId });
+        // Primary (state) -> History default run selection
+        const state = await refreshPrimaryArea().catch((e) => {
+          console.error(e);
+          dbgErr("[ui] refreshPrimaryArea error", e);
+          return null;
+        });
+
+        const defaultRunNo = state?.run?.run_no ?? null;
+        await refreshHistoryArea(defaultRunNo);
+      }
+
+      runSelect.addEventListener("change", async () => {
+        __selectedRunNo = runSelect.value || null;
+        await loadThreadsForSelectedRun().catch((e) => {
+          historyStatus.textContent = `エラー: ${String(e?.message || e)}`;
+        });
+      });
+
+      refreshHistoryBtn.addEventListener("click", async () => {
+        await refreshAll();
+      });
+
+      // BFCache（戻る）やタブ復帰でUIが古い状態のまま復元されるのを防ぐ
+      window.addEventListener("pageshow", () => {
+        refreshAll().catch(() => { });
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          refreshAll().catch(() => { });
+        }
+      });
+
+      await refreshAll();
+    }
+
+    main().catch((e) => {
+      console.error(e);
+    });
+  </script>
+</body>
+
+</html>
