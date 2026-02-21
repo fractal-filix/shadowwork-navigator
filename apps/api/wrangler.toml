@@ -2,14 +2,6 @@ name = "filix-shadowwork-api"
 main = "src/worker.ts"
 compatibility_date = "2026-01-02"
 
-[vars]
-APP_ENV = "development"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "filix_shadowwork_dev"
-database_id = "REPLACE_WITH_DEV_D1_DATABASE_ID"
-
 [env.staging.vars]
 APP_ENV = "staging"
 
