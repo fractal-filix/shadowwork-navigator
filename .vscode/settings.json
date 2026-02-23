@@ -1,0 +1,16 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd apps/api; node --test tests/integration\\.test\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^node --test tests/integration\\.test\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^npm run build; node --test tests/integration\\.test\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

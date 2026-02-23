@@ -8,6 +8,8 @@ import { extractOutputText, getOpenAiModel } from '../lib/llm.js';
 import { fetchExternalApi } from '../lib/external_api.js';
 
 const MAX_MESSAGE_LENGTH = 2000;
+const MAX_CONTEXT_CARD_LENGTH = 200;
+const MAX_STEP2_META_CARD_LENGTH = 400;
 
 function buildSystemPrompt(step: number, questionNo?: number | null, sessionNo?: number | null): string {
   if (Number(step) === 1) {
@@ -29,7 +31,15 @@ function buildNextActionReply(step: number, questionNo: number | null, sessionNo
   return '次へ進みます。いま最も強く残っている感情を一つ書いてください。';
 }
 
-async function generateAssistantReply(env: Env, step: number, questionNo: number | null, sessionNo: number | null, userText: string): Promise<{ ok: true; reply: string } | { ok: false; response: Response }> {
+async function generateAssistantReply(
+  env: Env,
+  step: number,
+  questionNo: number | null,
+  sessionNo: number | null,
+  userText: string,
+  contextCard: string,
+  step2MetaCard: string | null,
+): Promise<{ ok: true; reply: string } | { ok: false; response: Response }> {
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) return { ok: false, response: errorResponse('INTERNAL_ERROR', 'OPENAI_API_KEY is not set', 500) };
 
@@ -40,6 +50,10 @@ async function generateAssistantReply(env: Env, step: number, questionNo: number
     model,
     input: [
       { role: "system", content: buildSystemPrompt(step, questionNo, sessionNo) },
+      { role: "system", content: `[context_card]\n${contextCard}` },
+      ...(Number(step) === 2 && step2MetaCard
+        ? [{ role: "system", content: `[step2_meta_card]\n${step2MetaCard}` }]
+        : []),
       { role: "user", content: userText }
     ]
   };
@@ -120,6 +134,8 @@ export async function threadChatHandler({ request, env, url }: ThreadChatHandler
 
   const message = body.message;
   const action = body.action;
+  const contextCard = body.context_card;
+  const step2MetaCard = body.step2_meta_card;
 
   if (typeof action !== 'undefined' && action !== 'next') {
     return badRequest('action must be "next" when provided');
@@ -152,12 +168,40 @@ export async function threadChatHandler({ request, env, url }: ThreadChatHandler
     return badRequest("message is required");
   }
 
+  if (typeof contextCard !== 'string' || !contextCard.trim()) {
+    return badRequest('context_card is required');
+  }
+
+  if (contextCard.trim().length > MAX_CONTEXT_CARD_LENGTH) {
+    return badRequest(`context_card is too long (max ${MAX_CONTEXT_CARD_LENGTH} chars)`);
+  }
+
+  if (typeof step2MetaCard !== 'undefined' && step2MetaCard !== null && typeof step2MetaCard !== 'string') {
+    return badRequest('step2_meta_card must be string when provided');
+  }
+
+  if (typeof step2MetaCard === 'string' && step2MetaCard.trim().length > MAX_STEP2_META_CARD_LENGTH) {
+    return badRequest(`step2_meta_card is too long (max ${MAX_STEP2_META_CARD_LENGTH} chars)`);
+  }
+
+  if (Number(thread.step) === 2 && (typeof step2MetaCard !== 'string' || !step2MetaCard.trim())) {
+    return badRequest('step2_meta_card is required on step2');
+  }
+
   const content = message.trim();
   if (content.length > MAX_MESSAGE_LENGTH) {
     return badRequest(`message is too long (max ${MAX_MESSAGE_LENGTH} chars)`);
   }
 
-  const replyResult = await generateAssistantReply(env, thread.step, thread.question_no, thread.session_no, content);
+  const replyResult = await generateAssistantReply(
+    env,
+    thread.step,
+    thread.question_no,
+    thread.session_no,
+    content,
+    contextCard.trim(),
+    typeof step2MetaCard === 'string' ? step2MetaCard.trim() : null,
+  );
   if (!replyResult.ok) return replyResult.response;
 
   const response: ThreadMessageResponse = {

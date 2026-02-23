@@ -18,6 +18,7 @@ let lastCheckoutBody = '';
 let stripeCheckoutCreateStatus = 200;
 let openAiResponsesMode = 'ok';
 let openAiResponsesRequestCount = 0;
+let lastOpenAiResponsesRequestJson = null;
 
 const MOCK_SESSION_ID = 'cs_test_123';
 const STRIPE_EVENT_ID = 'evt_test_123';
@@ -178,35 +179,48 @@ before(async () => {
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/responses') {
-      openAiResponsesRequestCount += 1;
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += String(chunk);
+      });
+      req.on('end', () => {
+        openAiResponsesRequestCount += 1;
 
-      if (openAiResponsesMode === 'network_error') {
-        req.socket.destroy();
-        return;
-      }
+        lastOpenAiResponsesRequestJson = null;
+        try {
+          lastOpenAiResponsesRequestJson = JSON.parse(raw || '{}');
+        } catch {
+          lastOpenAiResponsesRequestJson = null;
+        }
 
-      if (openAiResponsesMode === 'slow_ok') {
-        setTimeout(() => {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ output_text: 'mock reply' }));
-        }, 200);
-        return;
-      }
+        if (openAiResponsesMode === 'network_error') {
+          req.socket.destroy();
+          return;
+        }
 
-      if (openAiResponsesMode === 'non_json') {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('not-json-response');
-        return;
-      }
+        if (openAiResponsesMode === 'slow_ok') {
+          setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ output_text: 'mock reply' }));
+          }, 200);
+          return;
+        }
 
-      if (openAiResponsesMode === 'error_json') {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: { message: 'mock openai error' } }));
-        return;
-      }
+        if (openAiResponsesMode === 'non_json') {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('not-json-response');
+          return;
+        }
 
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ output_text: 'mock reply' }));
+        if (openAiResponsesMode === 'error_json') {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'mock openai error' } }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ output_text: 'mock reply' }));
+      });
       return;
     }
 
@@ -231,6 +245,7 @@ beforeEach(async () => {
     stripeCheckoutCreateStatus = 200;
     openAiResponsesMode = 'ok';
     openAiResponsesRequestCount = 0;
+    lastOpenAiResponsesRequestJson = null;
     const workerPath = path.resolve('dist', 'worker.js');
 
     mf = new Miniflare({
@@ -881,7 +896,7 @@ test('POST /api/thread/chat returns standardized internal error when OpenAI retu
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello' }),
+    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
   });
 
   assert.equal(res.status, 502);
@@ -917,7 +932,7 @@ test('POST /api/thread/chat returns standardized internal error when OpenAI retu
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello' }),
+    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
   });
 
   assert.equal(res.status, 502);
@@ -953,7 +968,7 @@ test('POST /api/thread/chat returns standardized internal error when OpenAI fetc
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello' }),
+    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
   });
 
   assert.equal(res.status, 502);
@@ -987,7 +1002,7 @@ test('POST /api/thread/chat returns bad request when message is too long', async
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'a'.repeat(2001) }),
+    body: JSON.stringify({ message: 'a'.repeat(2001), context_card: '- 感情: 不安' }),
   });
 
   assert.equal(res.status, 400);
@@ -1058,7 +1073,7 @@ test('POST /api/thread/chat does not persist plaintext message', async () => {
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello from chat' }),
+    body: JSON.stringify({ message: 'hello from chat', context_card: '- 感情: 不安' }),
   });
 
   assert.equal(res.status, 200);
@@ -1071,6 +1086,157 @@ test('POST /api/thread/chat does not persist plaintext message', async () => {
     .bind(threadId)
     .first();
   assert.equal(countRow?.count, 0);
+});
+
+test('POST /api/thread/chat returns bad request when context_card is missing', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: 'hello' }),
+  });
+
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'BAD_REQUEST');
+});
+
+test('POST /api/thread/chat returns bad request when context_card exceeds 200 chars', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: 'hello', context_card: 'あ'.repeat(201) }),
+  });
+
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'BAD_REQUEST');
+});
+
+test('POST /api/thread/chat sends context_card to OpenAI input', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+
+  const contextCard = '- 感情: 不安\n- 引き金: 評価される場面';
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: 'hello', context_card: contextCard }),
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(openAiResponsesRequestCount, 1);
+  assert.ok(lastOpenAiResponsesRequestJson);
+
+  const input = lastOpenAiResponsesRequestJson.input;
+  assert.ok(Array.isArray(input));
+  const hasContextCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes(contextCard));
+  assert.equal(hasContextCard, true);
+});
+
+test('POST /api/thread/chat sends step2_meta_card to OpenAI only on step2', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+  const runBody = await runRes.json();
+  const runId = runBody.run?.id;
+  assert.equal(typeof runId, 'string');
+
+  await db
+    .prepare('INSERT INTO threads (id, run_id, user_id, step, question_no, session_no, status) VALUES (?, ?, ?, 2, NULL, 1, ? )')
+    .bind('thread-step2-active-1', runId, MEMBER_ID, 'active')
+    .run();
+
+  const contextCard = '- 感情: 恥\n- 反応: 過剰適応';
+  const metaCard = '- Step2洞察: 怒りの下に恐れがある';
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message: 'session2 を進めたい',
+      context_card: contextCard,
+      step2_meta_card: metaCard,
+    }),
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(openAiResponsesRequestCount, 1);
+  assert.ok(lastOpenAiResponsesRequestJson);
+
+  const input = lastOpenAiResponsesRequestJson.input;
+  assert.ok(Array.isArray(input));
+  const hasMetaCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes(metaCard));
+  assert.equal(hasMetaCard, true);
 });
 
 test('POST /api/thread/message persists encrypted payload and GET /api/thread/messages returns encrypted fields', async () => {
@@ -1298,6 +1464,108 @@ test('POST /api/thread/message returns 400 when id fields exceed max length', as
     assert.equal(body.ok, false);
     assert.equal(body.error?.code, 'BAD_REQUEST');
   }
+});
+
+test('POST/GET /api/thread/context_card stores and returns encrypted context card', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const threadStartBody = await threadStartRes.json();
+  const threadId = threadStartBody.thread?.id;
+  assert.equal(typeof threadId, 'string');
+
+  const saveRes = await mf.dispatchFetch('http://localhost/api/thread/context_card', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      ciphertext: 'ctx-cipher-1',
+      iv: 'ctx-iv-1',
+      alg: 'AES-256-GCM',
+      v: 1,
+      kid: 'k-ctx-1',
+    }),
+  });
+
+  assert.equal(saveRes.status, 200);
+  const saveBody = await saveRes.json();
+  assert.equal(saveBody.ok, true);
+
+  const getRes = await mf.dispatchFetch(`http://localhost/api/thread/context_card?thread_id=${threadId}`, {
+    method: 'GET',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+
+  assert.equal(getRes.status, 200);
+  const getBody = await getRes.json();
+  assert.equal(getBody.ok, true);
+  assert.equal(getBody.card.ciphertext, 'ctx-cipher-1');
+  assert.equal(getBody.card.iv, 'ctx-iv-1');
+  assert.equal(getBody.card.alg, 'AES-256-GCM');
+  assert.equal(getBody.card.v, 1);
+  assert.equal(getBody.card.kid, 'k-ctx-1');
+});
+
+test('POST/GET /api/run/step2_meta_card stores and returns encrypted run-level card', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const saveRes = await mf.dispatchFetch('http://localhost/api/run/step2_meta_card', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ciphertext: 'meta-cipher-1',
+      iv: 'meta-iv-1',
+      alg: 'AES-256-GCM',
+      v: 1,
+      kid: 'k-meta-1',
+    }),
+  });
+
+  assert.equal(saveRes.status, 200);
+  const saveBody = await saveRes.json();
+  assert.equal(saveBody.ok, true);
+
+  const getRes = await mf.dispatchFetch('http://localhost/api/run/step2_meta_card', {
+    method: 'GET',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+
+  assert.equal(getRes.status, 200);
+  const getBody = await getRes.json();
+  assert.equal(getBody.ok, true);
+  assert.equal(getBody.card.ciphertext, 'meta-cipher-1');
+  assert.equal(getBody.card.iv, 'meta-iv-1');
+  assert.equal(getBody.card.alg, 'AES-256-GCM');
+  assert.equal(getBody.card.v, 1);
+  assert.equal(getBody.card.kid, 'k-meta-1');
 });
 
 test('GET /api/thread/state returns encrypted last_message when message exists', async () => {
@@ -1644,7 +1912,7 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello' }),
+    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
   });
 
   assert.equal(messageRes.status, 200);

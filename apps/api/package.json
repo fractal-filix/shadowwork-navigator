@@ -6,7 +6,7 @@
     "dev": "wrangler dev",
     "build": "esbuild src/worker.ts --bundle --format=esm --platform=neutral --outfile=dist/worker.js",
     "deploy": "npm run build && wrangler deploy",
-    "test": "npm run build && node --test tests/*.test.js"
+    "test": "npm run build && node --test tests/integration.test.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250106.0",

@@ -163,6 +163,49 @@ CREATE INDEX IF NOT EXISTS idx_messages_thread_created
     ON messages(thread_id, created_at);
 
 -- =========================
+-- Cards (encrypted context cards)
+-- =========================
+CREATE TABLE IF NOT EXISTS cards (
+    id TEXT PRIMARY KEY,
+
+    run_id TEXT NOT NULL,
+    thread_id TEXT,
+    user_id TEXT NOT NULL,
+
+    kind TEXT NOT NULL, -- 'context_card' | 'step2_meta_card'
+
+    -- Encrypted content only (never plaintext)
+    content TEXT NOT NULL,
+    content_iv TEXT NOT NULL,
+    content_alg TEXT NOT NULL,
+    content_v INTEGER NOT NULL DEFAULT 1,
+    content_kid TEXT,
+
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+    updated_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+
+    FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
+
+    CHECK (kind IN ('context_card', 'step2_meta_card')),
+    CHECK (
+        (kind = 'context_card' AND thread_id IS NOT NULL) OR
+        (kind = 'step2_meta_card' AND thread_id IS NULL)
+    )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_thread_kind
+    ON cards(thread_id, kind)
+    WHERE kind = 'context_card';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_run_kind
+    ON cards(run_id, kind)
+    WHERE kind = 'step2_meta_card';
+
+CREATE INDEX IF NOT EXISTS idx_cards_user_created
+    ON cards(user_id, created_at);
+
+-- =========================
 -- User-level flags (payment gate etc.)
 -- =========================
 CREATE TABLE IF NOT EXISTS user_flags (

@@ -111,6 +111,10 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
   スレッド開始。
 - `POST /api/thread/chat`  
   LLM中継（平文を受け取り応答を返す。保存はしない）。
+- `POST /api/thread/context_card`  
+  スレッド単位の `context_card` 暗号文を保存（upsert）する。
+- `GET /api/thread/context_card`  
+  スレッド単位の `context_card` 暗号文を取得する。
 - `POST /api/thread/message`  
   暗号化済みメッセージを保存する。
 - `GET /api/thread/state`  
@@ -125,6 +129,10 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
   実行開始。
 - `POST /api/run/restart`  
   実行再開（続きから進める想定）。
+- `POST /api/run/step2_meta_card`  
+  active run 単位の `step2_meta_card` 暗号文を保存（upsert）する。
+- `GET /api/run/step2_meta_card`  
+  active run 単位の `step2_meta_card` 暗号文を取得する。
 - `GET /api/runs/list`  
   実行一覧取得。
 
@@ -208,7 +216,11 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 **認証**: 必要。  
 **入力**: JSON（例）
 ```json
-{ "message": "text" }
+{
+  "message": "text",
+  "context_card": "- 箇条書き\n- 200字以内",
+  "step2_meta_card": "- Step2の重要気づき（Step2時のみ、400字以内）"
+}
 ```
 
 **成功レスポンス（例）**:
@@ -219,7 +231,61 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 補足:
 - 本エンドポイントは平文を永続化しない。
 - LLM利用料金の抑制を目的とした入力文字数制限は、本エンドポイントの平文入力（`message`）に対して適用する。
+- `context_card` は必須（200文字以下）。
+- `step2_meta_card` は Step2 の thread では必須（400文字以下）。
 - `action: "next"` 指定時はLLM呼び出しを行わず、次アクション用の文面を返す。
+
+---
+
+### POST /api/thread/context_card
+
+**目的**: スレッド単位の `context_card` を暗号文で保存（upsert）する。  
+**認証**: 必要。  
+**入力**: JSON（例）
+```json
+{
+  "thread_id": "t_xxx",
+  "ciphertext": "base64...",
+  "iv": "base64...",
+  "alg": "AES-256-GCM",
+  "v": 1,
+  "kid": "k1"
+}
+```
+
+---
+
+### GET /api/thread/context_card
+
+**目的**: スレッド単位の `context_card` 暗号文を取得する。  
+**認証**: 必要。  
+**入力**: クエリ（例）
+- `thread_id`（必須）
+
+---
+
+### POST /api/run/step2_meta_card
+
+**目的**: active run 単位の `step2_meta_card` を暗号文で保存（upsert）する。  
+**認証**: 必要。  
+**入力**: JSON（例）
+```json
+{
+  "ciphertext": "base64...",
+  "iv": "base64...",
+  "alg": "AES-256-GCM",
+  "v": 1,
+  "kid": "k1"
+}
+```
+
+---
+
+### GET /api/run/step2_meta_card
+
+**目的**: active run 単位の `step2_meta_card` 暗号文を取得する。  
+**認証**: 必要。  
+**入力**: なし（active run を参照）
 
 ---
 
@@ -346,6 +412,7 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 - `POST /api/thread/chat` と `POST /api/thread/message` は分離された責務である。
 - AI応答成功は保存成功を意味しないため、保存結果は別途判定する。
 - バックエンドは復号鍵を保持しないため、履歴暗号文の復号は行えない。
+- `context_card` / `step2_meta_card` は暗号文として保存し、AI送信時はフロントが復号した平文を `POST /api/thread/chat` に同梱する。
 - 「直近 n 回 + 要約」をAIに送る場合、フロントは履歴暗号文を復号して組み立てる。
 - 履歴復号に必要な鍵が無い/不正な場合は、AI送信前にユーザーへ再設定を促す。
 
