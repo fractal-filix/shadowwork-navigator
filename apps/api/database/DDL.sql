@@ -134,6 +134,12 @@ CREATE TABLE IF NOT EXISTS messages (
     content_v INTEGER NOT NULL DEFAULT 1,
     content_kid TEXT,
 
+    -- Envelope encryption metadata (wrapped DEK)
+    content_wrapped_key TEXT,
+    content_wrapped_key_alg TEXT,
+    content_wrapped_key_kid TEXT,
+    content_key_v INTEGER,
+
     -- Strict ordering within a thread (DO NOT rely on created_at for ordering)
     seq INTEGER NOT NULL,
 
@@ -180,6 +186,12 @@ CREATE TABLE IF NOT EXISTS cards (
     content_alg TEXT NOT NULL,
     content_v INTEGER NOT NULL DEFAULT 1,
     content_kid TEXT,
+
+    -- Envelope encryption metadata (wrapped DEK)
+    content_wrapped_key TEXT,
+    content_wrapped_key_alg TEXT,
+    content_wrapped_key_kid TEXT,
+    content_key_v INTEGER,
 
     created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
     updated_at TEXT NOT NULL DEFAULT (DATETIME('now')),
