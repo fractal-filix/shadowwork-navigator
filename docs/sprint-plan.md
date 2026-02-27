@@ -1,29 +1,42 @@
-# β版スプリント計画
+# β版スプリント計画（カード無し）
 
-作成日: 2026-02-26
+作成日: 2026-02-28
 
 ## 目的（βで「使える」定義）
 β版で最低限成立させる体験は以下。
 
-1. 購入（Stripe Checkout）
-2. ログイン（Supabase Auth → `/api/auth/exchange` → 自前JWT Cookie）
-3. チャット（`/api/thread/chat` で平文中継）
-4. 履歴確認（暗号文保存 → 復号して表示）
+1. ログイン（Supabase Auth → `/api/auth/exchange` → 自前JWT Cookie）
+2. 購入（Stripe Checkout）
+3. チャット（`/api/thread/chat` でLLM応答を生成し、暗号化して保存）
+4. 履歴確認（暗号文保存 → ブラウザで復号して表示）
 5. Step1/Step2 ナビ（run/threadの一覧・状態遷移）
-6. AIガイド（RAGは最低限でよい。Qdrantを使って関連チャンクを注入）
+6. AIガイド（Qdrantで関連チャンクを注入するRAG）
 7. セキュリティ（Cookie運用/CORS、Secrets管理、ログ抑制、権限制御）
 
 ## 重要な前提（設計として確定）
-- **本文（メッセージ全文・カード）は封筒暗号で暗号化して保存**する。
+
+### カードは存在しない
+- `context_card` / `step2_meta_card` / `cards` テーブル / カード用APIは **完全に廃止**する。
+- これらは設計書・DDL・型・テスト・ルーティング・実装から削除する。
+
+### 本文は封筒暗号（最初から必須）
+- **本文（メッセージ全文）は封筒暗号で暗号化して保存**する。
   - 本文はDEK（共通鍵）で暗号化し、DEKはKEKで暗号化（ラップ）して保存する。
-  - KEKはAWS KMS等の鍵管理基盤で保管・ローテーション・監査し、DBにKEKは保存しない。
+  - KEKは鍵管理基盤（KMS等）で保管・ローテーション・監査し、DBにKEKは保存しない。
   - APIの暗号メタは `wrapped_key`, `wrapped_key_alg`, `wrapped_key_kid` を含む。
+
+**鍵管理方式（決定）**: 非対称ラップ（クライアント生成DEKを公開鍵でラップして送信）
+- 理由: バックエンドが平文DEKに触れない運用が容易で、誤読リスクを下げられるため。
+
+### RAG（Qdrant）はβ必須
 - **Qdrant（ベクトルDB）を活かすため、検索用チャンクは本文と別系統で保存**する。
   - チャンクはやむを得ず平文を含みうる（本文と同等に機微情報として扱う）。
   - Qdrantは「検索インデックス」であり本文の正はD1（暗号文）。
 
-**鍵管理方式（決定）**: 非対称ラップを採用します（クライアント生成DEKを公開鍵でラップして送信）。
-- 理由: バックエンドが平文DEKに触れない運用が容易になり、管理者の誤読リスクを低減するため。
+### カスタムドメインと SameSite=Strict（βの前提）
+- Web: `shadowwork-navigator.com`
+- API: `api.shadowwork-navigator.com`
+- 上記は同一eTLD+1配下のため、**SameSite=Strict Cookie運用の前提を満たす**。
 
 ## スコープ外（βではやらない）
 - 精度最適化（プロンプト改善の作り込み、評価基盤）
@@ -32,82 +45,112 @@
 
 ## PR分割
 
-### PR#1 認証移行（Supabase Auth → exchange）
-**狙い**: Memberstack依存を外し、Cookie JWT（SameSite=Strict）でAPIが呼べる状態にする。
+### PR#1 同一site前提の確立（CORS/credentials/Set-Cookie）
+**狙い**: `shadowwork-navigator.com` → `api.shadowwork-navigator.com` のブラウザ通信で、JWT Cookie（SameSite=Strict）が確実に機能する状態にする。
+
+- API: CORS allowlist を本番Originに合わせる（`ALLOWED_ORIGINS` に `https://shadowwork-navigator.com` を含める）
+- API: `Access-Control-Allow-Origin` はリクエストOriginを **そのままエコー**（`*` は不可）
+- API: `Access-Control-Allow-Credentials: true` を常に付与
+- Web: fetch を `credentials: 'include'` に統一（`Set-Cookie` を受け取り、以後Cookie送信させる）
+- API: `/api/auth/exchange` の `Set-Cookie` を点検（`Secure; HttpOnly; SameSite=Strict; Path=/`）
+- Web: API_BASE を本番ドメインへ切替（ハードコードを廃止し、同一site想定で設定化）
+
+**受入条件**
+- ブラウザでログイン→exchange→以後の保護APIがCookie JWTで通る（403/401の挙動も仕様どおり）
+- DevToolsで Cookie が `api.shadowwork-navigator.com` 宛リクエストに送信されている
+
+### PR#2 認証移行（Supabase Auth → exchange）
+**狙い**: Memberstack依存を外し、JWT（Cookie）でAPIが呼べる状態にする。
+
 - API: `/api/auth/exchange` を Supabase JWT 検証に置換
-- API: 本番Secrets/Varsの棚卸し（MEMBERSTACK_* を撤去、SUPABASE_* を追加）
-- Web: `credentials: 'include'` 統一、`user_id` クエリ廃止（JWT由来に統一）
+- API: Secrets/Varsの棚卸し（MEMBERSTACK_* を撤去、SUPABASE_* を追加）
+- API: Memberstack前提のチェックを削除（例: production時のキー形式ガード）
+- Web: `user_id` クエリ送信を廃止（JWT由来に統一）
+
 **受入条件**: ログイン→exchange→保護APIが200で通る（paid未満は403等が正しく出る）
 
-### PR#2 購入導線（Stripe Checkout）+ paid判定のUI統合
-**狙い**: βで「購入→利用開始」が成立。
-- Web: purchaseページをSupabaseログイン前提に更新（Memberstack削除）
-- API: Checkout Session作成を現契約（JWTのsub）で確実に紐付け
-- Web: `/api/paid` の反映、未paid時の導線（purchaseへ誘導）
-**受入条件**: checkout→webhook→paid=true→run/startが通る
+### PR#3 カード機能の完全削除（API/DB/型/テスト/設計書）
+**狙い**: `context_card` / `step2_meta_card` を完全撤去し、βの“文脈注入”をRAGへ一本化する。
 
-### PR#3 封筒暗号（鍵管理の最小実装）
-**狙い**: 本文を暗号文のみで保存しつつ、復号に必要なDEKを安全に扱う。
-- AWS: KMSキー作成（対称/非対称は実装方式に合わせて選択）
-- API: KMS連携（署名付きリクエスト）
-- API: DEK供給/ラップ/アンラップのためのエンドポイントを追加（例: `POST /api/crypto/dek/new`, `POST /api/crypto/dek/unseal`）
-- API: `thread/message`, `context_card`, `step2_meta_card` で `wrapped_key*` の保存・返却を必須化
+- API: `/api/thread/context_card` と `/api/run/step2_meta_card` を削除（ルーティング含む）
+- API: `thread/chat` からカード必須入力・カード注入を削除
+- DB: `cards` テーブル/インデックスを DDL から削除
+- types/tests/docs: カード関連を削除し、仕様を更新
+
+**受入条件**: `thread/chat` がカード無しで200を返し、カードAPIが存在しない
+
+### PR#4 封筒暗号（メッセージ保存の最小実装）
+**狙い**: 本文を暗号文のみで保存し、復号に必要なメタ（wrapped_key* 含む）を扱える。
+
+- API: `thread/message` / `thread/messages` を封筒暗号メタ対応に拡張（入出力契約の確定）
+- API: wrapped_key* を **必須** として扱う（カード無し）
 - D1: `database/DDL.sql` の封筒暗号メタカラムを適用（ローカル/ステージング）
+
 **受入条件**: 1メッセージを暗号化して保存→履歴取得→復号して同一本文が表示できる
 
-### PR#4 Web暗号実装（保存/表示/再読込）
+### PR#5 Web暗号実装（保存/表示/再読込）
 **狙い**: UIが「暗号文API契約」に適合し、履歴が読める。
-- Web: 暗号化（AES-GCM等）/復号実装、`wrapped_key*` も一緒に保存
+
+- Web: 暗号化（AES-GCM等）/復号実装
 - Web: `thread/messages` の暗号文を復号して表示（平文前提の実装を修正）
-- Web: `context_card` / `step2_meta_card` の暗号化保存・復号編集
+- Web: 送信は `thread/chat`（LLM応答生成）→ 生成結果を含めて `thread/message` へ暗号化保存、に整理
+
 **受入条件**: app/dashboardで履歴表示が成立（暗号文がそのまま見えない）
 
-### PR#5 Qdrant接続（インフラ/設定/最小クライアント）
+### PR#6 購入導線（Stripe Checkout）+ paid判定のUI統合
+**狙い**: βで「購入→利用開始」が成立。
+
+- Web: purchaseページをSupabaseログイン前提に更新
+- API: Checkout Session作成をJWTのsubで確実に紐付け
+- Web: `/api/paid` の反映、未paid時の導線（purchaseへ誘導）
+
+**受入条件**: checkout→webhook→paid=true→run/startが通る
+
+### PR#7 Qdrant接続（インフラ/設定/最小クライアント）
 **狙い**: WorkersからQdrantへ安全に接続し、collectionを用意。
+
 - Qdrant: 環境（Qdrant Cloud等）を確定、APIキー/TLSで接続
 - API: Qdrantクライアント実装（upsert/searchの最小）
 - API: env追加（QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION等）
+
 **受入条件**: 開発環境で upsert/search が疎通する
 
-### PR#6 チャンク保存（平文チャンク + embedding）
+### PR#8 チャンク保存（平文チャンク + embedding）
 **狙い**: 本文暗号化と独立に、検索用チャンクをQdrantへ保存できる。
+
 - Web→API: チャンクのアップサートAPI追加（例: `POST /api/rag/chunks`）
 - API: embedding生成（OpenAI embeddings等）→ Qdrant upsert
 - Qdrant payload: `user_id`, `thread_id`, `message_id`, `chunk_no`, `text`（平文チャンク）
+
 **受入条件**: 送ったチャンクが検索でヒットし、メタでフィルタ可能
 
-### PR#7 RAG注入（AIガイド最低限）
+### PR#9 RAG注入（AIガイド最低限）
 **狙い**: `/api/thread/chat` でQdrant検索結果（チャンク）をプロンプトに注入。
+
 - API: クエリ埋め込み → Qdrant search → 上位Kチャンクを prompt/context に追加
 - API: user_idで必ず絞り込み（他ユーザー混入を防ぐ）
+
 **受入条件**: 既知の内容を含むチャンクが応答に反映される（精度はβ品質で可）
 
-### PR#8 Stepナビ/履歴/UXの最終整合
-**狙い**: β必須の「ナビ」「履歴」が途切れず使える。
-- Web: runs/threadsの遷移・一覧をJWT Cookie前提で整合
-- Web: 保存失敗（pending_retry等）表示の最小反映
-**受入条件**: Step1→Step2→履歴参照が一連で成立
+### PR#10 セキュリティ仕上げ + テスト/リリースチェック
+**狙い**: 事故りやすい箇所をβ前に塞ぎ、リリースできる状態にする。
 
-### PR#9 セキュリティ仕上げ（β必須）
-**狙い**: 事故りやすい箇所をβ前に塞ぐ。
-- API: CORS allowlist / credentials / SameSite前提の確認
 - API: ログ抑制（平文、チャンク平文、鍵素材を出さない）
 - API: Rate limit / abuse対策（最低限）
-- 運用: Secrets/Vars一覧更新、手順メモ
-**受入条件**: Secrets漏えいリスクが設計どおり低い状態
-
-### PR#10 テスト/リリースチェック
-- tests: 既存integrationテストをSupabase/新契約に追従
+- tests: integrationテストをSupabase/新契約に追従
 - チェックリスト: βリリース手順（Workers/Pages/env/Stripe webhook/Qdrant/KMS）
 
+**受入条件**: βリリースチェックリストが埋まり、再現性ある手順でデプロイできる
+
 ## 依存関係（ざっくり）
-- PR#2 は PR#1 に依存（ログイン状態の確立）
-- PR#4 は PR#3 に依存（DEK/ラップのAPIが必要）
-- PR#7 は PR#5/PR#6 に依存（Qdrantにデータが入る必要）
+- PR#2 は PR#1 に依存（Cookie運用の成立）
+- PR#5 は PR#4 に依存（暗号メタの契約が必要）
+- PR#9 は PR#7/PR#8 に依存（Qdrantにデータが入る必要）
 
 ## βのDefinition of Done（最小）
-- 認証: Supabaseでログインでき、Cookie JWTで保護APIが動く
+- 認証: Supabaseでログインでき、Cookie JWTで保護APIが動く（同一site前提）
 - 課金: 購入→paid反映→利用開始が成立
 - 暗号: 本文はD1に暗号文のみ。復号して履歴表示できる（封筒暗号メタ含む）
 - RAG: Qdrantにチャンクが入り、`/api/thread/chat` が検索結果を注入する
+- カード: 仕様/実装/DBから完全に削除済み
 - セキュリティ: CORS/credentials/Secrets/ログ抑制が設計どおり
