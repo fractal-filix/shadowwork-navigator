@@ -48,12 +48,77 @@
 ### PR#1 同一site前提の確立（CORS/credentials/Set-Cookie）
 **狙い**: `shadowwork-navigator.com` → `api.shadowwork-navigator.com` のブラウザ通信で、JWT Cookie（SameSite=Strict）が確実に機能する状態にする。
 
+#### セットアップ（アカウント作成/初期設定）
+
+##### Supabase（未着手 → 必須）
+- Supabaseアカウント作成
+- Project作成（リージョン/プラン決定）
+- Auth有効化（Email+Password）
+- Site URL / Redirect URLs に `https://shadowwork-navigator.com` を追加
+- テストユーザ作成（β検証用）
+- API側でトークン検証に必要な情報を取得・保管
+  - `SUPABASE_URL`
+  - `SUPABASE_ANON_KEY`
+  - （必要なら）`SUPABASE_SERVICE_ROLE_KEY`
+  - （検証方式に応じて）JWKSのURL/issuer/audience 等
+
+##### AWS KMS（未着手 → 必須）
+**実装方針（β）**: 非対称ラップを採用。クライアントで生成したDEKをKMS公開鍵でラップし、`wrapped_key*` としてAPIへ送る。
+
+- AWSアカウントが無ければ作成（課金/権限/監査の前提）
+- KMSの非対称鍵ペアを作成（用途: `ENCRYPT_DECRYPT`）
+- 公開鍵取得（GetPublicKey）と `kid`（鍵識別子）運用を確定
+- CloudTrailを有効化（KMS操作の監査ログ）
+- IAMポリシーを作成
+  - 公開鍵取得（GetPublicKey）の許可主体
+  - 管理者用アンラップ（Decrypt）の許可主体（βでは最小人数/最小権限）
+
+##### Qdrant（未着手 → 必須）
+- Qdrantアカウント作成（Qdrant Cloud想定）
+- Cluster作成（リージョン/プラン決定）
+- API Key 発行
+- Collection作成（embedding次元/距離関数）
+- Workersから疎通できるURL/TLS要件を確認
+
+#### インフラ前提（DNSは完了）
+- ✅ DNSレコード設定（`shadowwork-navigator.com` / `api.shadowwork-navigator.com`）
+- TLS（HTTPS）確認（Cookie運用のため必須）
+
 - API: CORS allowlist を本番Originに合わせる（`ALLOWED_ORIGINS` に `https://shadowwork-navigator.com` を含める）
 - API: `Access-Control-Allow-Origin` はリクエストOriginを **そのままエコー**（`*` は不可）
 - API: `Access-Control-Allow-Credentials: true` を常に付与
 - Web: fetch を `credentials: 'include'` に統一（`Set-Cookie` を受け取り、以後Cookie送信させる）
 - API: `/api/auth/exchange` の `Set-Cookie` を点検（`Secure; HttpOnly; SameSite=Strict; Path=/`）
 - Web: API_BASE を本番ドメインへ切替（ハードコードを廃止し、同一site想定で設定化）
+
+#### Secrets/Vars（Cloudflare）
+**狙い**: βの“未設定で詰まる”を防ぐため、最初に環境変数を棚卸しして登録する。
+
+- API（Workers）
+  - `ALLOWED_ORIGINS`（本番: `https://shadowwork-navigator.com`）
+  - `JWT_SIGNING_SECRET`（自前JWT署名鍵）
+  - `SUPABASE_URL`, `SUPABASE_ANON_KEY`（＋必要なら `SUPABASE_SERVICE_ROLE_KEY`）
+  - `OPENAI_API_KEY`（embeddings/LLM用）
+  - `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION`
+  - KMS連携用（方式確定後に追加）
+    - `AWS_REGION`
+    - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`（必要なら `AWS_SESSION_TOKEN`）
+    - `KMS_KEY_ID`（`kid`と紐付け）
+- Web（Pages）
+  - Supabase（クライアント用）設定
+  - API Base URL（本番: `https://api.shadowwork-navigator.com`）
+
+#### Cloudflare / D1（必須）
+- Workers（staging/production）の環境変数（vars）とSecretsが反映されていることを確認
+- D1（staging/production）の binding が `DB` であることを確認（`wrangler.toml`）
+- DDLの適用手順を確立
+  - 開発環境は `apps/api/scripts/recreate-d1.ps1` を使用してD1再作成＋DDL適用（破壊的なので開発のみ）
+  - staging/production は既存DBに対して安全にDDL差分を適用（破壊的操作はしない）
+
+#### Stripe（設定済み：確認のみ）
+- ✅ Stripeアカウント/商品/Checkout導線は設定済み
+- Webhook が `https://api.shadowwork-navigator.com/api/stripe/webhook` に向いていることを確認
+- `STRIPE_WEBHOOK_SECRET` がWorkers Secretsに登録済みであることを確認
 
 **受入条件**
 - ブラウザでログイン→exchange→以後の保護APIがCookie JWTで通る（403/401の挙動も仕様どおり）
@@ -84,6 +149,14 @@
 
 - API: `thread/message` / `thread/messages` を封筒暗号メタ対応に拡張（入出力契約の確定）
 - API: wrapped_key* を **必須** として扱う（カード無し）
+- API: KMS公開鍵の配布（例: `GET /api/crypto/kms_public_key`）
+  - 返却: `kid` と公開鍵（PEM/JWK等、WebでRSA-OAEPラップできる形式）
+- API: wrapped_key のアンラップ（例: `POST /api/crypto/dek/unseal`）
+  - 用途: 履歴復号のために必要な場合のみ（βでは“本人操作のみ”に限定し、監査ログを必須化）
+  - 実装: Workers → AWS KMS Decrypt（SigV4署名が必要）
+  - 注意: 平文DEKは絶対にログへ出さない（メトリクス/例外も含む）
+- API: AWS SigV4署名の実装（KMS呼び出し用）
+- 運用: Decrypt（アンラップ）操作の監査メタを記録（操作者、理由、timestamp、対象thread/message等）
 - D1: `database/DDL.sql` の封筒暗号メタカラムを適用（ローカル/ステージング）
 
 **受入条件**: 1メッセージを暗号化して保存→履歴取得→復号して同一本文が表示できる
