@@ -25,7 +25,11 @@
 - [-] 1.5.1.8 staging に ADMIN_MEMBER_IDS を登録（secret list 棚卸しで未登録）（1pt）※Memberstack廃止予定のため実行スキップ（記録のみ）。 2.2（MEMBERSTACK_* 撤去）で回収予定
 - [x] 1.6.2 D1（staging/production）の binding が DB であることを確認（wrangler.toml）（1pt）
 - [ ] 1.7.2 Webhook が https://api.shadowwork-navigator.com/api/stripe/webhook に向いていることを確認（1pt）
-- [ ] 1.7.3 STRIPE_WEBHOOK_SECRET がWorkers Secretsに登録済みであることを確認（1pt）
+	- 手順: docs/sprints/sprint1/runbook_20260302.md
+	- 実装側の根拠: apps/api/src/worker.ts で `POST /api/stripe/webhook` をルーティング済み
+	- 到達性: `curl --ssl-no-revoke -i -X POST https://api.shadowwork-navigator.com/api/stripe/webhook` で 400（missing Stripe-Signature）を確認
+- [x] 1.7.3 STRIPE_WEBHOOK_SECRET がWorkers Secretsに登録済みであることを確認（1pt）
+	- 手順: docs/sprints/sprint1/runbook_20260302.md
 - [ ] 1.1.1 Supabaseアカウント作成（1pt）
 - [ ] 1.1.2 Project作成（リージョン/プラン決定）（2pt）
 - [ ] 1.1.3 Auth有効化（Email+Password）（2pt）
@@ -33,6 +37,7 @@
 - [ ] 1.1.5 テストユーザ作成（β検証用）（1pt）
 - [ ] 1.1.6 API側でトークン検証に必要な情報を取得・保管（3pt）
 - [ ] 1.1.6.1 SUPABASE_URL を取得（1pt）
+	- 手順: docs/sprints/sprint1/runbook_20260302.md
 
 ## 2026.03.03
 - [ ] 1.1.6.2 SUPABASE_ANON_KEY を取得（1pt）
