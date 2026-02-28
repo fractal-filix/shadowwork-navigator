@@ -1,24 +1,10 @@
-# タスク一覧（番号順 + 日付挿入）
+# タスク一覧
 
 作成日: 2026-02-28
 
 - 合計: 236pt
 - 対象: docs/sprint-plan.md の（0pt除外）
 - 日割りの考え方: 2026/03/01〜03/15 を 16pt/日 で累計（16, 32, 48...）。閾値を跨いだタスクは前日側に残す（超過分は前倒し）。
-
-## PR#1 進捗メモ（2026-02-28）
-
-- [x] 1.4.4 API: `Access-Control-Allow-Origin` を Origin エコー（`*` 不可）
-- [x] 1.4.5 API: `Access-Control-Allow-Credentials: true` 付与
-- [x] 1.4.6 Web: `fetch` を `credentials: 'include'` に統一
-- [x] 1.4.7 API: `/api/auth/exchange` の `Set-Cookie` 属性をテストで検証
-- [x] 1.4.8 Web: API Base URL を `https://api.shadowwork-navigator.com` 前提に設定化
-- [x] 1.6.2 D1 binding `DB`（`apps/api/wrangler.toml`）
-- [ ] 1.4.2 TLS（HTTPS）確認（本番ドメインでブラウザ確認）
-- [ ] 1.5.x Cloudflare Secrets/Vars の実登録（staging/production）
-- [ ] 1.6.1 Workers（staging/production）反映確認
-- [ ] 1.7.2 Stripe Webhook URL の向き先確認
-- [ ] 1.7.3 `STRIPE_WEBHOOK_SECRET` 登録確認
 
 ## 2026.03.01（合計: 17pt）
 - 1.1.1 Supabaseアカウント作成（1pt）
@@ -56,6 +42,11 @@
 - 1.4.6 Web: fetch を credentials: 'include' に統一（2pt）
 - 1.4.7 API: /api/auth/exchange の Set-Cookie を点検（Secure; HttpOnly; SameSite=Strict; Path=/）（2pt）
 - 1.4.8 Web: API Base URL を https://api.shadowwork-navigator.com 前提に設定化（2pt）
+ - [x] 1.4.4 API: Access-Control-Allow-Origin をOriginエコーにする（*不可）（2pt）
+ - [x] 1.4.5 API: Access-Control-Allow-Credentials: true を常に付与（1pt）
+ - [x] 1.4.6 Web: fetch を credentials: 'include' に統一（2pt）
+ - [x] 1.4.7 API: /api/auth/exchange の Set-Cookie を点検（Secure; HttpOnly; SameSite=Strict; Path=/）（2pt）
+ - [x] 1.4.8 Web: API Base URL を https://api.shadowwork-navigator.com 前提に設定化（2pt）
 - 1.5.1 API（Workers）: Secrets/Vars の棚卸しと登録（3pt）
 - 1.5.1.1 ALLOWED_ORIGINS を登録（1pt）
 - 1.5.1.2 JWT_SIGNING_SECRET を登録（2pt）
@@ -78,6 +69,9 @@
 - 1.6.1 Workers（staging/production）のVars/Secrets反映を確認（2pt）
 - 1.6.2 D1（staging/production）の binding が DB であることを確認（wrangler.toml）（1pt）
 - 1.6.3 DDLの適用手順を確立（3pt）
+ - 1.6.1 Workers（staging/production）のVars/Secrets反映を確認（2pt）
+ - [x] 1.6.2 D1（staging/production）の binding が DB であることを確認（wrangler.toml）（1pt）
+ - 1.6.3 DDLの適用手順を確立（3pt）
 - 1.6.3.1 開発環境: apps/api/scripts/recreate-d1.ps1 でD1再作成＋DDL適用（破壊的なので開発のみ）（2pt）
 - 1.6.3.2 staging/production: 既存DBへ安全にDDL差分を適用（破壊的操作はしない）（4pt）
 
