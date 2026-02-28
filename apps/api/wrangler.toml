@@ -8,6 +8,8 @@ ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
 JWT_ISSUER = "shadowwork-navigator-api"
 JWT_AUDIENCE = "shadowwork-navigator-web"
 ACCESS_TOKEN_TTL_SECONDS = "900"
+SUPABASE_URL="https://bekltsvemtvbjxwrqvxg.supabase.co"
+SUPABASE_JWKS_URL="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1/.well-known/jwks.json"
 
 [env.staging]
 name = "filix-shadowwork-api-staging"
@@ -24,6 +26,8 @@ ALLOW_NON_LIVE_MEMBERSTACK_KEY = "true"
 JWT_ISSUER = "shadowwork-navigator-api"
 JWT_AUDIENCE = "shadowwork-navigator-web"
 ACCESS_TOKEN_TTL_SECONDS = "900"
+SUPABASE_URL="https://bekltsvemtvbjxwrqvxg.supabase.co"
+SUPABASE_JWKS_URL="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1/.well-known/jwks.json"
 
 [env.production]
 name = "filix-shadowwork-api"
