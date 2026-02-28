@@ -4,6 +4,7 @@ compatibility_date = "2026-01-02"
 
 [env.staging.vars]
 APP_ENV = "staging"
+ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
 
 [env.staging]
 name = "filix-shadowwork-api-staging"
@@ -15,6 +16,7 @@ database_id = "554a6e64-4dd1-4bc5-b13e-a9de3d43631b"
 
 [env.production.vars]
 APP_ENV = "production"
+ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
 
 [env.production]
 name = "filix-shadowwork-api"

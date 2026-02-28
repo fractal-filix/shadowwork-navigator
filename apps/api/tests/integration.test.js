@@ -427,6 +427,9 @@ test('POST /api/auth/exchange succeeds and sets JWT cookie', async () => {
   const setCookie = res.headers.get('Set-Cookie') || '';
   assert.match(setCookie, /access_token=/);
   assert.match(setCookie, /HttpOnly/);
+  assert.match(setCookie, /Secure/);
+  assert.match(setCookie, /SameSite=Strict/);
+  assert.match(setCookie, /Path=\//);
 });
 
 test('POST /api/auth/exchange returns unauthorized for invalid memberstack token', async () => {
@@ -512,6 +515,33 @@ test('CORS blocks request when Origin is not in allowlist', async () => {
   assert.equal(body.ok, false);
   assert.equal(body.error?.code, 'FORBIDDEN');
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+test('CORS echoes allowed Origin and allows credentials', async () => {
+  const res = await mf.dispatchFetch('http://localhost/', {
+    method: 'GET',
+    headers: {
+      Origin: 'http://localhost:3000',
+    },
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
+  assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
+});
+
+test('OPTIONS preflight for allowed Origin returns CORS headers', async () => {
+  const res = await mf.dispatchFetch('http://localhost/api/paid', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'http://localhost:3000',
+    },
+  });
+
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
+  assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
+  assert.match(res.headers.get('Access-Control-Allow-Methods') || '', /OPTIONS/);
 });
 
 test('CORS fails closed when ALLOWED_ORIGINS is empty', async () => {

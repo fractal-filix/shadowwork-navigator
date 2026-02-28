@@ -1,5 +1,8 @@
 // /lib/client.js
-export const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+const DEFAULT_API_BASE = "https://api.shadowwork-navigator.com";
+
+export const API_BASE =
+  (globalThis.SHADOWNAV_API_BASE || localStorage.getItem("SHADOWNAV_API_BASE") || DEFAULT_API_BASE).trim();
 export const DEBUG_UI = false; // true にすると dbg が console に出す
 
 export function dbg(...args) {
@@ -38,7 +41,7 @@ export async function apiPaid(userId) {
   const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
   dbg("[api] paid ->", url);
 
-  const res = await fetch(url);
+  const res = await fetch(url, { credentials: "include" });
   const data = await res.json().catch(() => ({}));
 
   dbg("[api] paid <-", data);

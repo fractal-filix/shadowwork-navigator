@@ -44,6 +44,11 @@ STRIPE_CHECKOUT_MODE  = "payment"
 - 開発用ショートカット（例: `X-TEST-MEMBER-ID` によるテスト用なりすまし）は `APP_ENV=test` の場合のみ有効にするなど、環境で挙動を切り替える運用をしてください。
 - `POST /api/checkout/session` は `member_id`（JWTの`sub`）を `mem_` 形式として検証し、Stripe Checkout には `mode=payment` と `client_reference_id=<member_id>` を付与します。
 
+CORS/Cookie 運用の必須設定
+- `ALLOWED_ORIGINS` は許可する Origin のみを設定する（`*` 不可）。
+- CORS は許可 Origin をエコーし、`Access-Control-Allow-Credentials: true` を返す。
+- `/api/auth/exchange` の `Set-Cookie` は `HttpOnly; Secure; SameSite=Strict; Path=/` を維持する。
+
 ドキュメント追記希望があれば、`.env.example` の追加やデプロイ手順のテンプレートも作成します。
 
 D1再作成の自動化（PowerShell）

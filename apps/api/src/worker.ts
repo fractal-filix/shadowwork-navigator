@@ -38,19 +38,23 @@ function isAllowedOrigin(origin: string, env: Env): boolean {
   return getAllowedOrigins(env).includes(origin);
 }
 
-function corsHeaders(origin: string): Record<string, string> {
-
+function corsHeaders(origin?: string): Record<string, string> {
   // CORS Allowlist（環境変数から取得）
   // 本番: https://shadowwork-navigator.com のみ
   // 開発: preview URLは原則許可しない（例外は1件だけ環境変数で指定）
-  return {
-    "Access-Control-Allow-Origin": origin,
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Credentials": "true", // Cookie送受信を許可
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
+
+  if (origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+
+  return headers;
 }
 
 function withCors(res: Response, cors: Record<string, string>): Response {
@@ -98,7 +102,7 @@ const worker: ExportedHandler<Env> = {
       return errorResponse('FORBIDDEN', 'origin not allowed', 403);
     }
 
-    const ch = origin ? corsHeaders(origin) : {};
+    const ch = corsHeaders(origin ?? undefined);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: ch });
     }
