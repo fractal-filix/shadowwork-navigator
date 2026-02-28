@@ -502,6 +502,37 @@ test('worker returns standardized internal error for invalid production memberst
   }
 });
 
+test('OPTIONS preflight is allowed even when production memberstack secret is invalid', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-worker-options' },
+    bindings: {
+      ...buildEnvBindings(),
+      APP_ENV: 'production',
+      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
+    },
+  });
+
+  try {
+    const res = await localMf.dispatchFetch('http://localhost/api/auth/exchange', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:3000',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    });
+
+    assert.equal(res.status, 204);
+    assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
+    assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
+  } finally {
+    await localMf.dispose();
+  }
+});
+
 test('CORS blocks request when Origin is not in allowlist', async () => {
   const res = await mf.dispatchFetch('http://localhost/', {
     method: 'GET',

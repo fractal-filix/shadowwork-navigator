@@ -93,10 +93,6 @@ router.on("POST", "/api/stripe/webhook", stripeWebhookHandler);
 
 const worker: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (env.APP_ENV === "production" && !env.MEMBERSTACK_SECRET_KEY.startsWith("sk_live_")) {
-      return errorResponse('INTERNAL_ERROR', 'misconfigured memberstack secret key', 500);
-    }
-
     const origin = request.headers.get("Origin");
     if (origin && !isAllowedOrigin(origin, env)) {
       return errorResponse('FORBIDDEN', 'origin not allowed', 403);
@@ -105,6 +101,10 @@ const worker: ExportedHandler<Env> = {
     const ch = corsHeaders(origin ?? undefined);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: ch });
+    }
+
+    if (env.APP_ENV === "production" && !env.MEMBERSTACK_SECRET_KEY.startsWith("sk_live_")) {
+      return withCors(errorResponse('INTERNAL_ERROR', 'misconfigured memberstack secret key', 500), ch);
     }
 
     let res: Response;
