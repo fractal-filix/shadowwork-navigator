@@ -17,9 +17,17 @@ database_id = "554a6e64-4dd1-4bc5-b13e-a9de3d43631b"
 [env.production.vars]
 APP_ENV = "production"
 ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
+ALLOW_NON_LIVE_MEMBERSTACK_KEY = "true"
 
 [env.production]
 name = "filix-shadowwork-api"
+workers_dev = true
+preview_urls = true
+
+[[env.production.routes]]
+pattern = "api.shadowwork-navigator.com"
+zone_name = "shadowwork-navigator.com"
+custom_domain = true
 
 [[env.production.d1_databases]]
 binding = "DB"
