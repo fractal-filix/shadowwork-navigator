@@ -9,17 +9,18 @@
 > 注: 本ファイルは「日付＝実行順」で並べる（依存関係で前後しない）前提。
 
 ## 2026.03.01（実行順: Web→API 疎通の確立）
-- [ ] 1.4.2 TLS（HTTPS）確認（Cookie運用のため必須）（1pt）
-- [ ] 1.4.3 API: CORS allowlist を本番Originに合わせる（ALLOWED_ORIGINS に https://shadowwork-navigator.com）（1pt）
+- [x] 1.4.2 TLS（HTTPS）確認（Cookie運用のため必須）（1pt）
+- [x] 1.4.3 API: CORS allowlist を本番Originに合わせる（ALLOWED_ORIGINS に https://shadowwork-navigator.com）（1pt）
 - [x] 1.4.4 API: Access-Control-Allow-Origin をOriginエコーにする（*不可）（2pt）
 - [x] 1.4.5 API: Access-Control-Allow-Credentials: true を常に付与（1pt）
 - [x] 1.4.6 Web: fetch を credentials: 'include' に統一（2pt）
 - [x] 1.4.7 API: /api/auth/exchange の Set-Cookie を点検（Secure; HttpOnly; SameSite=Strict; Path=/）（2pt）
 - [x] 1.4.8 Web: API Base URL を https://api.shadowwork-navigator.com 前提に設定化（2pt）
 
-- [ ] 1.5.1 API（Workers）: Secrets/Vars の棚卸しと登録（3pt）
+- [x] 1.5.1 API（Workers）: Secrets/Vars の棚卸しと登録（3pt）
 - [x] 1.5.1.1 ALLOWED_ORIGINS を登録（1pt）
 - [x] 1.5.1.2 JWT_SIGNING_SECRET を登録（2pt）
+- [-] 1.5.1.8 staging に ADMIN_MEMBER_IDS を登録（secret list 棚卸しで未登録）（1pt）※Memberstack廃止予定のため実行スキップ（記録のみ）。 2.2（MEMBERSTACK_* 撤去）で回収予定
 - [x] 1.6.2 D1（staging/production）の binding が DB であることを確認（wrangler.toml）（1pt）
 
 ## 2026.03.02（実行順: Stripe 到達性の確認）
