@@ -126,6 +126,12 @@ before(async () => {
           return;
         }
 
+        if (parsed.token === 'valid-memberstack-token-nested') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ data: { member: { id: 'mem_test_auth_nested' } } }));
+          return;
+        }
+
         if (parsed.token === 'slow-memberstack-token') {
           setTimeout(() => {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -430,6 +436,19 @@ test('POST /api/auth/exchange succeeds and sets JWT cookie', async () => {
   assert.match(setCookie, /Secure/);
   assert.match(setCookie, /SameSite=Strict/);
   assert.match(setCookie, /Path=\//);
+});
+
+test('POST /api/auth/exchange succeeds when member id is nested in verify response', async () => {
+  const res = await mf.dispatchFetch('http://localhost/api/auth/exchange', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: 'valid-memberstack-token-nested' }),
+  });
+
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.member_id, 'mem_test_auth_nested');
 });
 
 test('POST /api/auth/exchange returns unauthorized for invalid memberstack token', async () => {
