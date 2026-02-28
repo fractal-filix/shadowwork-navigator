@@ -35,8 +35,8 @@
 - [x] 1.1.3 Auth有効化（Email+Password）（2pt）
     - テストユーザーでログイン確認済
     - smtp未設定
-- [ ] 1.1.4 Site URL / Redirect URLs に https://shadowwork-navigator.com を追加（1pt）
-- [ ] 1.1.5 テストユーザ作成（β検証用）（1pt）
+- [x] 1.1.4 Site URL / Redirect URLs に https://shadowwork-navigator.com を追加（1pt）
+- [x] 1.1.5 テストユーザ作成（β検証用）（1pt）
 - [ ] 1.1.6 API側でトークン検証に必要な情報を取得・保管（3pt）
 - [ ] 1.1.6.1 SUPABASE_URL を取得（1pt）
 	- 手順: docs/sprints/sprint1/runbook_20260302.md
