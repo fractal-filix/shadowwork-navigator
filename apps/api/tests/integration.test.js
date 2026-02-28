@@ -502,6 +502,28 @@ test('worker returns standardized internal error for invalid production memberst
   }
 });
 
+test('worker allows non-live memberstack key in production when override is enabled', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-worker-override' },
+    bindings: {
+      ...buildEnvBindings(),
+      APP_ENV: 'production',
+      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
+      ALLOW_NON_LIVE_MEMBERSTACK_KEY: 'true',
+    },
+  });
+
+  try {
+    const res = await localMf.dispatchFetch('http://localhost/');
+    assert.equal(res.status, 200);
+  } finally {
+    await localMf.dispose();
+  }
+});
+
 test('OPTIONS preflight is allowed even when production memberstack secret is invalid', async () => {
   const workerPath = path.resolve('dist', 'worker.js');
   const localMf = new Miniflare({

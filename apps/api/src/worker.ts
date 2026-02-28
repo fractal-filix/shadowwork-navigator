@@ -103,7 +103,12 @@ const worker: ExportedHandler<Env> = {
       return new Response(null, { status: 204, headers: ch });
     }
 
-    if (env.APP_ENV === "production" && !env.MEMBERSTACK_SECRET_KEY.startsWith("sk_live_")) {
+    const allowNonLiveMemberstackKey = env.ALLOW_NON_LIVE_MEMBERSTACK_KEY === "true";
+    if (
+      env.APP_ENV === "production" &&
+      !allowNonLiveMemberstackKey &&
+      !env.MEMBERSTACK_SECRET_KEY.startsWith("sk_live_")
+    ) {
       return withCors(errorResponse('INTERNAL_ERROR', 'misconfigured memberstack secret key', 500), ch);
     }
 
