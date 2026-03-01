@@ -69,6 +69,10 @@ pnpm exec wrangler secret list --env production
 - `JWT_ISSUER`
 - `JWT_AUDIENCE`
 - `ACCESS_TOKEN_TTL_SECONDS`
+- `SUPABASE_URL`
+- `SUPABASE_JWKS_URL`
+- `SUPABASE_ISSUER`
+- `SUPABASE_AUDIENCE`
 
 必須 Secrets（3/1時点）:
 - `ADMIN_MEMBER_IDS`

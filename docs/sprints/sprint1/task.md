@@ -43,15 +43,21 @@
 	- 手順: docs/sprints/sprint1/runbook_20260302.md
 
 ## 2026.03.03
-- [ ] 1.1.6.2 SUPABASE_ANON_KEY を取得（1pt）
-- [ ] 1.1.6.3 （必要なら）SUPABASE_SERVICE_ROLE_KEY を取得（2pt）
-- [ ] 1.1.6.4 （検証方式に応じて）JWKSのURL/issuer/audience 等を確定（3pt）
-- [ ] 1.5.1.3 SUPABASE_URL, SUPABASE_ANON_KEY を登録（1pt）
-- [ ] 1.5.1.4 （必要なら）SUPABASE_SERVICE_ROLE_KEY を登録（2pt）
-- [ ] 1.5.2 Web（Pages）: 設定の反映（2pt）
-- [ ] 1.5.2.1 Supabase（クライアント用）設定を登録（2pt）
-- [ ] 1.5.2.2 API Base URL（本番: https://api.shadowwork-navigator.com）を登録（1pt）
+- [-] 1.1.6.2 SUPABASE_ANON_KEY を取得（1pt）
+    - SUPABASE_ANON_KEYはレガシーなので使用しない
+- [x] 1.1.6.3 （必要なら）SUPABASE_SERVICE_ROLE_KEY を取得（2pt）
+- [x] 1.1.6.4 （検証方式に応じて）JWKSのURL/issuer/audience 等を確定（3pt）
+	- 確定値: `SUPABASE_JWKS_URL` / `SUPABASE_ISSUER` / `SUPABASE_AUDIENCE=authenticated`
+	- 反映: `apps/api/wrangler.toml`, `apps/api/src/types/env.ts`, `apps/api/scripts/verify-jwt.mjs`
+- [x] 1.5.1.3 SUPABASE_URL, SUPABASE_ANON_KEY を登録（1pt）
+- [x] 1.5.1.4 （必要なら）SUPABASE_SERVICE_ROLE_KEY を登録（2pt）
+- [x] 1.5.2 Web（Pages）: 設定の反映（2pt）
+- [x] 1.5.2.1 Supabase（クライアント用）設定を登録（2pt）
+	- `apps/web/pages/lib/client.js` に `SHADOWNAV_SUPABASE_URL` / `SHADOWNAV_SUPABASE_ANON_KEY` を追加
+- [x] 1.5.2.2 API Base URL（本番: https://api.shadowwork-navigator.com）を登録（1pt）
+	- `apps/web/pages/lib/client.js` の既定値を維持、`apps/web/README.md` に反映手順を追記
 - [ ] 1.6.1 Workers（staging/production）のVars/Secrets反映を確認（2pt）
+	- 確認手順を `docs/sprints/sprint1/runbook_20260302.md` に追記（実環境での `wrangler secret list` 実行は未実施）
 
 ## 2026.03.04
 - [ ] 1.2.1 AWSアカウントが無ければ作成（課金/権限/監査の前提）（2pt）
