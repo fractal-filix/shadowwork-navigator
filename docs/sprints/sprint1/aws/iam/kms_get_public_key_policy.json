@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowGetPublicKeyForShadowworkNavigatorKmsKey",
+      "Effect": "Allow",
+      "Action": [
+        "kms:GetPublicKey",
+        "kms:DescribeKey"
+      ],
+      "Resource": "arn:aws:kms:ap-southeast-2:555569220922:key/ea3e43d1-bc62-47d5-af00-fc609843a46f"
+    }
+  ]
+}

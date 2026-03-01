@@ -293,7 +293,7 @@
     async function apiGetState(userId) {
       const url = `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(userId)}`;
       dbg("[api] thread/state ->", url);
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[api] thread/state <-", data);
       return data;
@@ -303,6 +303,7 @@
       dbg("[api] run/start ->", userId);
       const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
@@ -316,6 +317,7 @@
       dbg("[api] run/restart ->", userId);
       const res = await fetch(`${API_BASE}/api/run/restart?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
@@ -329,6 +331,7 @@
       dbg("[api] thread/start ->", userId);
       const res = await fetch(`${API_BASE}/api/thread/start?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
@@ -341,7 +344,7 @@
     // --- history APIs ---
     async function apiRunsList(userId) {
       dbg("[history] runs/list ->", userId);
-      const res = await fetch(`${API_BASE}/api/runs/list?user_id=${encodeURIComponent(userId)}`);
+      const res = await fetch(`${API_BASE}/api/runs/list?user_id=${encodeURIComponent(userId)}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] runs/list <-", data);
       if (!res.ok) throw new Error(data?.error || "runs/list failed");
@@ -350,7 +353,7 @@
 
     async function apiThreadsList(userId, runNo) {
       dbg("[history] threads/list ->", { userId, runNo });
-      const res = await fetch(`${API_BASE}/api/threads/list?user_id=${encodeURIComponent(userId)}&run_no=${encodeURIComponent(runNo)}`);
+      const res = await fetch(`${API_BASE}/api/threads/list?user_id=${encodeURIComponent(userId)}&run_no=${encodeURIComponent(runNo)}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] threads/list <-", data);
       if (!res.ok) throw new Error(data?.error || "threads/list failed");
@@ -359,7 +362,7 @@
 
     async function apiThreadMessages(userId, threadId) {
       dbg("[history] thread/messages ->", { userId, threadId });
-      const res = await fetch(`${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(userId)}&thread_id=${encodeURIComponent(threadId)}`);
+      const res = await fetch(`${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(userId)}&thread_id=${encodeURIComponent(threadId)}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] thread/messages <-", data);
       if (!res.ok) throw new Error(data?.error || "thread/messages failed");

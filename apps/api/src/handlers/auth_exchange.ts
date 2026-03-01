@@ -19,6 +19,62 @@ interface MemberstackVerifyResponse {
   [key: string]: unknown;
 }
 
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  return value as Record<string, unknown>;
+}
+
+function toMemberId(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+}
+
+function extractMemberIdFromVerifyResponse(value: unknown): string | null {
+  const obj = toRecord(value);
+  if (!obj) return null;
+
+  const direct =
+    toMemberId(obj.id) ||
+    toMemberId(obj.member_id) ||
+    toMemberId(obj.memberId);
+  if (direct) return direct;
+
+  const member = toRecord(obj.member);
+  if (member) {
+    const memberId =
+      toMemberId(member.id) ||
+      toMemberId(member.member_id) ||
+      toMemberId(member.memberId);
+    if (memberId) return memberId;
+  }
+
+  const data = toRecord(obj.data);
+  if (data) {
+    const dataId =
+      toMemberId(data.id) ||
+      toMemberId(data.member_id) ||
+      toMemberId(data.memberId);
+    if (dataId) return dataId;
+
+    const dataMember = toRecord(data.member);
+    if (dataMember) {
+      const nestedMemberId =
+        toMemberId(dataMember.id) ||
+        toMemberId(dataMember.member_id) ||
+        toMemberId(dataMember.memberId);
+      if (nestedMemberId) return nestedMemberId;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Memberstack トークンを検証し、JWT を発行して Cookie で返す
  * 
@@ -78,13 +134,14 @@ export async function authExchangeHandler({ request, env }: AuthExchangeContext)
     }
 
     const verifyData = await verifyResponse.json() as MemberstackVerifyResponse;
+    const extractedMemberId = extractMemberIdFromVerifyResponse(verifyData);
 
-    // 検証成功確認（Member オブジェクトに id が含まれている）
-    if (!verifyData.id) {
+    // 検証成功確認（レスポンス内に member id が含まれている）
+    if (!extractedMemberId) {
       return unauthorized('invalid memberstack response');
     }
 
-    memberId = String(verifyData.id);
+    memberId = extractedMemberId;
   } catch (err) {
     console.error('memberstack verify error:', err);
     return errorResponse('INTERNAL_ERROR', 'memberstack api error', 502, {

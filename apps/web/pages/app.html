@@ -90,7 +90,7 @@
     async function fetchState() {
       const res = await fetch(
         `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-        { method: "GET" }
+        { method: "GET", credentials: "include" }
       );
       const json = await res.json();
       console.log("[thread/state]", json);
@@ -109,7 +109,7 @@
     async function apiThreadMessages(threadId) {
       const res = await fetch(
         `${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(USER_ID)}&thread_id=${encodeURIComponent(threadId)}`,
-        { method: "GET" }
+        { method: "GET", credentials: "include" }
       );
       const data = await res.json().catch(() => ({}));
       console.log("[thread/messages]", data);
@@ -170,7 +170,7 @@
       // なければ作る
       const res = await fetch(
         `${API_BASE}/api/thread/start?user_id=${encodeURIComponent(USER_ID)}`,
-        { method: "POST" }
+        { method: "POST", credentials: "include" }
       );
       const json = await res.json();
       console.log("[thread/start]", json);
@@ -202,6 +202,7 @@
     async function closeThread() {
       const res = await fetch(`${API_BASE}/api/thread/close`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: USER_ID }),
       });
@@ -262,7 +263,7 @@
 
           const res = await fetch(
             `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-            { method: "GET" }
+            { method: "GET", credentials: "include" }
           );
           const st = await res.json();
           console.log("[thread/state:init]", st);
@@ -331,6 +332,7 @@
 
         const res = await fetch(`${API_BASE}/api/thread/message`, {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: USER_ID, message }),
         });
