@@ -70,7 +70,7 @@
 - [x] 1.2.5 IAMポリシーを作成（4pt）
 	- 雛形: docs/sprints/sprint1/aws/iam/kms_get_public_key_policy.json
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
-- [ ] 1.2.5.1 公開鍵取得（GetPublicKey）の許可主体を確定（2pt）
+- [x] 1.2.5.1 公開鍵取得（GetPublicKey）の許可主体を確定（2pt）
 	- 結論（まずの案）: Workers 実行主体の AWS 資格情報のみ許可（一般ユーザー/開発者個人は原則不可）
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
 
