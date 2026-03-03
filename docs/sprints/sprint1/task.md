@@ -67,7 +67,7 @@
 	- kid（暫定案）: KMS KeyId を `kid` として扱う（運用を単純化）
 - [x] 1.2.4 CloudTrailを有効化（KMS操作の監査ログ）（2pt）
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
-- [ ] 1.2.5 IAMポリシーを作成（4pt）
+- [x] 1.2.5 IAMポリシーを作成（4pt）
 	- 雛形: docs/sprints/sprint1/aws/iam/kms_get_public_key_policy.json
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
 - [ ] 1.2.5.1 公開鍵取得（GetPublicKey）の許可主体を確定（2pt）
