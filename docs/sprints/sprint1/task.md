@@ -60,12 +60,12 @@
 
 ## 2026.03.04
 - [x] 1.2.1 AWSアカウントが無ければ作成（課金/権限/監査の前提）（2pt）
-- [ ] 1.2.2 KMSの非対称鍵ペアを作成（用途: ENCRYPT_DECRYPT）（4pt）
+- [x] 1.2.2 KMSの非対称鍵ペアを作成（用途: ENCRYPT_DECRYPT）（4pt）
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
-- [ ] 1.2.3 公開鍵取得（GetPublicKey）と kid（鍵識別子）運用を確定（3pt）
+- [x] 1.2.3 公開鍵取得（GetPublicKey）と kid（鍵識別子）運用を確定（3pt）
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
 	- kid（暫定案）: KMS KeyId を `kid` として扱う（運用を単純化）
-- [ ] 1.2.4 CloudTrailを有効化（KMS操作の監査ログ）（2pt）
+- [x] 1.2.4 CloudTrailを有効化（KMS操作の監査ログ）（2pt）
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
 - [ ] 1.2.5 IAMポリシーを作成（4pt）
 	- 雛形: docs/sprints/sprint1/aws/iam/kms_get_public_key_policy.json
