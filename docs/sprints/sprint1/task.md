@@ -75,7 +75,10 @@
 	- 手順: docs/sprints/sprint1/runbook_20260304.md
 
 ## 2026.03.05
-- [ ] 1.2.5.2 管理者用アンラップ（Decrypt）の許可主体を確定（3pt）
+- [x] 1.2.5.2 管理者用アンラップ（Decrypt）の許可主体を確定（3pt）
+	- 手順: docs/sprints/sprint1/runbook_20260305.md
+	- 結論: GetPublicKey と Decrypt の許可主体（Role）を分離
+	- 雛形: docs/sprints/sprint1/aws/iam/kms_decrypt_admin_policy.json, kms_decrypt_workers_policy.json, kms_decrypt_workers_trust_policy.json
 - [ ] 1.3.1 Qdrantアカウント作成（Qdrant Cloud想定）（1pt）
 - [ ] 1.3.2 Cluster作成（リージョン/プラン決定）（2pt）
 - [ ] 1.3.3 API Key 発行（1pt）
