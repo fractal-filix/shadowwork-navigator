@@ -2,6 +2,7 @@ import type { Env } from '../types/env.js';
 import { json, badRequest, methodNotAllowed, unauthorized, forbidden, internalError } from '../lib/http.js';
 import { authenticateRequest } from '../lib/auth.js';
 import { getUserPaidFlag } from '../lib/paid.js';
+import { assumeRole, kmsDecrypt } from '../lib/aws_kms.js';
 
 interface DekUnsealRequestBody {
   wrapped_key?: unknown;
@@ -43,6 +44,10 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
   if (!thread_id) return badRequest('thread_id is required');
   if (!message_id) return badRequest('message_id is required');
 
+  if (alg !== 'RSAES_OAEP_SHA_256' && alg !== 'RSAES_OAEP_SHA_1') {
+    return badRequest('wrapped_key_alg must be RSAES_OAEP_SHA_256 or RSAES_OAEP_SHA_1');
+  }
+
   // ここで監査ログを記録（まずは Cloudflare Workers のログ）
   console.info('DekUnseal requested', {
     user_id,
@@ -53,14 +58,62 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
     reason: reason ? '[REDACTED]' : undefined,
   });
 
-  // 環境変数に AWS 資格情報があるか確認
   if (!env.AWS_ACCESS_KEY_ID || !env.AWS_SECRET_ACCESS_KEY) {
-    // 実運用ではここで AssumeRole→KMS Decrypt を行う。現状は環境未設定のため実行不可。
     return internalError('Decrypt not available: missing AWS credentials in environment');
   }
 
-  // TODO: 実装 — sts:AssumeRole -> KMS Decrypt の実行 (SigV4署名付きリクエスト)
-  // セキュリティ上の注意: 平文DEK/平文本文をログや永続化に保存しないこと
+  const region = env.AWS_REGION?.trim() || 'ap-southeast-2';
+  const roleArn = env.ASSUME_ROLE_ARN?.trim();
+  if (!roleArn) {
+    return internalError('Decrypt not available: missing ASSUME_ROLE_ARN');
+  }
 
-  return json({ ok: true, message: 'decrypt endpoint accepted (not yet implemented on this worker)' }, 202);
+  const roleSessionName = env.ASSUME_ROLE_SESSION_NAME?.trim() || 'shadownav-dek-unseal';
+
+  try {
+    const assumed = await assumeRole(
+      {
+        accessKeyId: env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+        sessionToken: env.AWS_SESSION_TOKEN,
+      },
+      roleArn,
+      roleSessionName,
+      region,
+      900
+    );
+
+    const decrypted = await kmsDecrypt(
+      {
+        accessKeyId: assumed.accessKeyId,
+        secretAccessKey: assumed.secretAccessKey,
+        sessionToken: assumed.sessionToken,
+      },
+      region,
+      {
+        ciphertextBlobBase64: wrappedKey,
+        keyId: kid,
+        encryptionAlgorithm: alg,
+      }
+    );
+
+    return json({
+      ok: true,
+      thread_id,
+      message_id,
+      wrapped_key_kid: kid,
+      wrapped_key_alg: alg,
+      dek_base64: decrypted.plaintextBase64,
+    });
+  } catch (error) {
+    console.error('DekUnseal failed', {
+      user_id,
+      thread_id,
+      message_id,
+      kid,
+      alg,
+      error: String((error as Error)?.message || error),
+    });
+    return internalError('decrypt failed');
+  }
 }
