@@ -24,6 +24,7 @@ import { llmPingHandler } from "./handlers/llm_ping.js";
 import { llmRespondHandler } from "./handlers/llm_respond.js";
 
 import { stripeWebhookHandler } from "./handlers/stripe_webhook.js";
+import { dekUnsealHandler } from "./handlers/dek_unseal.js";
 
 const router = createRouter();
 
@@ -90,6 +91,7 @@ router.on("POST", "/api/llm/respond", llmRespondHandler);
 
 // stripe webhook
 router.on("POST", "/api/stripe/webhook", stripeWebhookHandler);
+router.on("POST", "/api/crypto/dek/unseal", dekUnsealHandler);
 
 const worker: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
