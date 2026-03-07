@@ -79,13 +79,15 @@
 	- 手順: docs/sprints/sprint1/runbook_20260305.md
 	- 結論: GetPublicKey と Decrypt の許可主体（Role）を分離
 	- 雛形: docs/sprints/sprint1/aws/iam/kms_decrypt_admin_policy.json, kms_decrypt_workers_policy.json, kms_decrypt_workers_trust_policy.json
-- [ ] 1.3.1 Qdrantアカウント作成（Qdrant Cloud想定）（1pt）
-- [ ] 1.3.2 Cluster作成（リージョン/プラン決定）（2pt）
-- [ ] 1.3.3 API Key 発行（1pt）
-- [ ] 1.3.4 Collection作成（embedding次元/距離関数）（3pt）
-- [ ] 1.3.5 Workersから疎通できるURL/TLS要件を確認（2pt）
+- [x] 1.3.1 Qdrantアカウント作成（Qdrant Cloud想定）（1pt）
+	- runbook: docs/sprints/sprint1/runbook_20260305_qdrant.md を参照し、アカウント/クラスタ/APIキー/コレクションを作成して下さい。
+- [x] 1.3.2 Cluster作成（リージョン/プラン決定）（2pt）
+- [x] 1.3.3 API Key 発行（1pt）
+- [x] 1.3.4 Collection作成（embedding次元/距離関数）（3pt）
+- [x] 1.3.5 Workersから疎通できるURL/TLS要件を確認（2pt）
+	- 確認結果: `curl.exe --ssl-no-revoke -i "$env:QDRANT_URL/collections" -H "api-key: $env:QDRANT_API_KEY"` で 200 OK と collection 一覧を確認
 - [ ] 1.5.1.5 OPENAI_API_KEY を登録（2pt）
-- [ ] 1.5.1.6 QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION を登録（2pt）
+- [x] 1.5.1.6 QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION を登録（2pt）
 
 ## 2026.03.06
 - [ ] 1.5.1.7 KMS連携用のAWS資格情報/設定を登録（3pt）
