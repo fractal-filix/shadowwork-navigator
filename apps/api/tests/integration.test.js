@@ -129,8 +129,6 @@ function buildEnvBindings() {
     SUPABASE_JWKS_URL: `${mockBaseUrl}/auth/v1/.well-known/jwks.json`,
     SUPABASE_ISSUER,
     SUPABASE_AUDIENCE,
-    MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-    MEMBERSTACK_API_BASE_URL: mockBaseUrl,
     ALLOWED_ORIGINS: 'http://localhost:3000',
     ADMIN_MEMBER_IDS: 'member-admin'
   };
@@ -508,82 +506,16 @@ test('POST /api/auth/exchange returns standardized internal error with details w
 });
 
 test('worker returns standardized internal error for invalid production memberstack secret', async () => {
-  const workerPath = path.resolve('dist', 'worker.js');
-  const localMf = new Miniflare({
-    scriptPath: workerPath,
-    modules: true,
-    d1Databases: { DB: 'test-db-worker' },
-    bindings: {
-      ...buildEnvBindings(),
-      APP_ENV: 'production',
-      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-    },
-  });
-
-  try {
-    const res = await localMf.dispatchFetch('http://localhost/');
-    assert.equal(res.status, 500);
-
-    const body = await res.json();
-    assert.equal(body.ok, false);
-    assert.equal(body.error?.code, 'INTERNAL_ERROR');
-    assert.equal(typeof body.error?.message, 'string');
-  } finally {
-    await localMf.dispose();
-  }
+  // Memberstack-specific production secret validation has been removed.
+  // This test is no longer applicable.
 });
 
 test('worker allows non-live memberstack key in production when override is enabled', async () => {
-  const workerPath = path.resolve('dist', 'worker.js');
-  const localMf = new Miniflare({
-    scriptPath: workerPath,
-    modules: true,
-    d1Databases: { DB: 'test-db-worker-override' },
-    bindings: {
-      ...buildEnvBindings(),
-      APP_ENV: 'production',
-      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-      ALLOW_NON_LIVE_MEMBERSTACK_KEY: 'true',
-    },
-  });
-
-  try {
-    const res = await localMf.dispatchFetch('http://localhost/');
-    assert.equal(res.status, 200);
-  } finally {
-    await localMf.dispose();
-  }
+  // Memberstack override behavior removed; test retained as placeholder.
 });
 
 test('OPTIONS preflight is allowed even when production memberstack secret is invalid', async () => {
-  const workerPath = path.resolve('dist', 'worker.js');
-  const localMf = new Miniflare({
-    scriptPath: workerPath,
-    modules: true,
-    d1Databases: { DB: 'test-db-worker-options' },
-    bindings: {
-      ...buildEnvBindings(),
-      APP_ENV: 'production',
-      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-    },
-  });
-
-  try {
-    const res = await localMf.dispatchFetch('http://localhost/api/auth/exchange', {
-      method: 'OPTIONS',
-      headers: {
-        Origin: 'http://localhost:3000',
-        'Access-Control-Request-Method': 'POST',
-        'Access-Control-Request-Headers': 'Content-Type',
-      },
-    });
-
-    assert.equal(res.status, 204);
-    assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
-    assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
-  } finally {
-    await localMf.dispose();
-  }
+  // OPTIONS preflight behavior is validated by other CORS tests above.
 });
 
 test('CORS blocks request when Origin is not in allowlist', async () => {

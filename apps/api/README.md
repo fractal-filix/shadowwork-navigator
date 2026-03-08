@@ -77,7 +77,6 @@ pnpm exec wrangler secret list --env production
 必須 Secrets（3/1時点）:
 - `ADMIN_MEMBER_IDS`
 - `JWT_SIGNING_SECRET`
-- `MEMBERSTACK_SECRET_KEY`
 - `OPENAI_API_KEY`
 - `PAID_ADMIN_TOKEN`
 - `STRIPE_PRICE_ID`

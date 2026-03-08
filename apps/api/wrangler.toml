@@ -23,7 +23,6 @@ database_id = "441982e1-251f-4641-bc5a-026ccd593889"
 [env.production.vars]
 APP_ENV = "production"
 ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
-ALLOW_NON_LIVE_MEMBERSTACK_KEY = "true"
 JWT_ISSUER = "shadowwork-navigator-api"
 JWT_AUDIENCE = "shadowwork-navigator-web"
 ACCESS_TOKEN_TTL_SECONDS = "900"
