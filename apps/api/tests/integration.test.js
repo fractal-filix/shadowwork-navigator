@@ -8,6 +8,18 @@ import http from 'node:http';
 
 const JWT_SECRET = 'test-jwt-secret';
 const MEMBER_ID = 'member-123';
+const SUPABASE_ISSUER = 'https://supabase.test/auth/v1';
+const SUPABASE_AUDIENCE = 'authenticated';
+const SUPABASE_KID = 'supabase-test-kid';
+const { privateKey: supabasePrivateKey, publicKey: supabasePublicKey } = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+});
+const supabasePublicJwk = {
+  ...(supabasePublicKey.export({ format: 'jwk' })),
+  kid: SUPABASE_KID,
+  alg: 'RS256',
+  use: 'sig',
+};
 let ddlSql = '';
 let mf = null;
 let db = null;
@@ -61,6 +73,40 @@ function createJwtToken(memberId, overrides = {}) {
   return `${data}.${signature}`;
 }
 
+function createSupabaseAccessToken(memberId, payloadOverrides = {}, headerOverrides = {}) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT',
+    kid: SUPABASE_KID,
+    ...headerOverrides,
+  };
+  const payload = {
+    sub: memberId,
+    iss: SUPABASE_ISSUER,
+    aud: SUPABASE_AUDIENCE,
+    iat: now,
+    exp: now + 60 * 60,
+    ...payloadOverrides,
+  };
+
+  const headerPart = base64UrlEncode(JSON.stringify(header));
+  const payloadPart = base64UrlEncode(JSON.stringify(payload));
+  const data = `${headerPart}.${payloadPart}`;
+
+  const signature = crypto
+    .createSign('RSA-SHA256')
+    .update(data)
+    .end()
+    .sign(supabasePrivateKey)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  return `${data}.${signature}`;
+}
+
 function buildEnvBindings() {
   return {
     APP_ENV: 'test',
@@ -77,8 +123,12 @@ function buildEnvBindings() {
     JWT_ISSUER: 'test-issuer',
     JWT_AUDIENCE: 'test-audience',
     ACCESS_TOKEN_TTL_SECONDS: '3600',
-    MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-    MEMBERSTACK_API_BASE_URL: mockBaseUrl,
+    SUPABASE_URL: 'https://supabase.test',
+    SUPABASE_PUBLISHABLE_KEY: 'supabase-anon-key',
+    SUPABASE_SERVICE_ROLE_KEY: 'supabase-service-role-key',
+    SUPABASE_JWKS_URL: `${mockBaseUrl}/auth/v1/.well-known/jwks.json`,
+    SUPABASE_ISSUER,
+    SUPABASE_AUDIENCE,
     ALLOWED_ORIGINS: 'http://localhost:3000',
     ADMIN_MEMBER_IDS: 'member-admin'
   };
@@ -98,51 +148,9 @@ before(async () => {
   mockServer = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
 
-    if (req.method === 'POST' && url.pathname === '/members/verify-token') {
-      const apiKey = req.headers['x-api-key'];
-      if (apiKey !== 'sk_test_member') {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'unauthorized' }));
-        return;
-      }
-
-      let raw = '';
-      req.on('data', (chunk) => {
-        raw += String(chunk);
-      });
-      req.on('end', () => {
-        let parsed = {};
-        try {
-          parsed = JSON.parse(raw || '{}');
-        } catch {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'bad json' }));
-          return;
-        }
-
-        if (parsed.token === 'valid-memberstack-token') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ id: 'mem_test_auth' }));
-          return;
-        }
-
-        if (parsed.token === 'valid-memberstack-token-nested') {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ data: { member: { id: 'mem_test_auth_nested' } } }));
-          return;
-        }
-
-        if (parsed.token === 'slow-memberstack-token') {
-          setTimeout(() => {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ id: 'mem_test_auth' }));
-          }, 200);
-          return;
-        }
-
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'invalid token' }));
-      });
+    if (req.method === 'GET' && url.pathname === '/auth/v1/.well-known/jwks.json') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ keys: [supabasePublicJwk] }));
       return;
     }
 
@@ -413,10 +421,11 @@ test('POST /api/auth/exchange returns standardized error for invalid json', asyn
 });
 
 test('POST /api/auth/exchange succeeds and sets JWT cookie', async () => {
+  const supabaseToken = createSupabaseAccessToken('mem_test_auth');
   const res = await mf.dispatchFetch('http://localhost/api/auth/exchange', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: 'valid-memberstack-token' }),
+    body: JSON.stringify({ token: supabaseToken }),
   });
 
   assert.equal(res.status, 200);
@@ -438,11 +447,12 @@ test('POST /api/auth/exchange succeeds and sets JWT cookie', async () => {
   assert.match(setCookie, /Path=\//);
 });
 
-test('POST /api/auth/exchange succeeds when member id is nested in verify response', async () => {
+test('POST /api/auth/exchange uses sub claim as member_id', async () => {
+  const supabaseToken = createSupabaseAccessToken('mem_test_auth_nested');
   const res = await mf.dispatchFetch('http://localhost/api/auth/exchange', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: 'valid-memberstack-token-nested' }),
+    body: JSON.stringify({ token: supabaseToken }),
   });
 
   assert.equal(res.status, 200);
@@ -451,11 +461,11 @@ test('POST /api/auth/exchange succeeds when member id is nested in verify respon
   assert.equal(body.member_id, 'mem_test_auth_nested');
 });
 
-test('POST /api/auth/exchange returns unauthorized for invalid memberstack token', async () => {
+test('POST /api/auth/exchange returns unauthorized for invalid supabase token', async () => {
   const res = await mf.dispatchFetch('http://localhost/api/auth/exchange', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: 'invalid-memberstack-token' }),
+    body: JSON.stringify({ token: 'invalid-supabase-token' }),
   });
 
   assert.equal(res.status, 401);
@@ -465,7 +475,7 @@ test('POST /api/auth/exchange returns unauthorized for invalid memberstack token
   assert.equal(typeof body.error?.message, 'string');
 });
 
-test('POST /api/auth/exchange returns standardized internal error with details when memberstack fetch fails', async () => {
+test('POST /api/auth/exchange returns standardized internal error with details when jwks fetch fails', async () => {
   const workerPath = path.resolve('dist', 'worker.js');
   const localMf = new Miniflare({
     scriptPath: workerPath,
@@ -473,7 +483,7 @@ test('POST /api/auth/exchange returns standardized internal error with details w
     d1Databases: { DB: 'test-db-auth-exchange-fetch-fail' },
     bindings: {
       ...buildEnvBindings(),
-      MEMBERSTACK_API_BASE_URL: 'http://127.0.0.1:9',
+      SUPABASE_JWKS_URL: 'http://127.0.0.1:9/auth/v1/.well-known/jwks.json',
     },
   });
 
@@ -481,7 +491,7 @@ test('POST /api/auth/exchange returns standardized internal error with details w
     const res = await localMf.dispatchFetch('http://localhost/api/auth/exchange', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: 'valid-memberstack-token' }),
+      body: JSON.stringify({ token: createSupabaseAccessToken('mem_test_auth') }),
     });
 
     assert.equal(res.status, 502);
@@ -490,85 +500,6 @@ test('POST /api/auth/exchange returns standardized internal error with details w
     assert.equal(body.error?.code, 'INTERNAL_ERROR');
     assert.equal(typeof body.error?.message, 'string');
     assert.equal(typeof body.error?.details?.message, 'string');
-  } finally {
-    await localMf.dispose();
-  }
-});
-
-test('worker returns standardized internal error for invalid production memberstack secret', async () => {
-  const workerPath = path.resolve('dist', 'worker.js');
-  const localMf = new Miniflare({
-    scriptPath: workerPath,
-    modules: true,
-    d1Databases: { DB: 'test-db-worker' },
-    bindings: {
-      ...buildEnvBindings(),
-      APP_ENV: 'production',
-      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-    },
-  });
-
-  try {
-    const res = await localMf.dispatchFetch('http://localhost/');
-    assert.equal(res.status, 500);
-
-    const body = await res.json();
-    assert.equal(body.ok, false);
-    assert.equal(body.error?.code, 'INTERNAL_ERROR');
-    assert.equal(typeof body.error?.message, 'string');
-  } finally {
-    await localMf.dispose();
-  }
-});
-
-test('worker allows non-live memberstack key in production when override is enabled', async () => {
-  const workerPath = path.resolve('dist', 'worker.js');
-  const localMf = new Miniflare({
-    scriptPath: workerPath,
-    modules: true,
-    d1Databases: { DB: 'test-db-worker-override' },
-    bindings: {
-      ...buildEnvBindings(),
-      APP_ENV: 'production',
-      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-      ALLOW_NON_LIVE_MEMBERSTACK_KEY: 'true',
-    },
-  });
-
-  try {
-    const res = await localMf.dispatchFetch('http://localhost/');
-    assert.equal(res.status, 200);
-  } finally {
-    await localMf.dispose();
-  }
-});
-
-test('OPTIONS preflight is allowed even when production memberstack secret is invalid', async () => {
-  const workerPath = path.resolve('dist', 'worker.js');
-  const localMf = new Miniflare({
-    scriptPath: workerPath,
-    modules: true,
-    d1Databases: { DB: 'test-db-worker-options' },
-    bindings: {
-      ...buildEnvBindings(),
-      APP_ENV: 'production',
-      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
-    },
-  });
-
-  try {
-    const res = await localMf.dispatchFetch('http://localhost/api/auth/exchange', {
-      method: 'OPTIONS',
-      headers: {
-        Origin: 'http://localhost:3000',
-        'Access-Control-Request-Method': 'POST',
-        'Access-Control-Request-Headers': 'Content-Type',
-      },
-    });
-
-    assert.equal(res.status, 204);
-    assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
-    assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
   } finally {
     await localMf.dispose();
   }
@@ -674,21 +605,23 @@ test('GET /api/paid rejects test header without JWT cookie', async () => {
   assert.equal(typeof body.error?.message, 'string');
 });
 
-test('POST /api/checkout/session returns standardized bad request for invalid member_id format', async () => {
+test('POST /api/checkout/session accepts non-memberstack subject id from JWT', async () => {
+  const memberId = '3f9c5f71-4764-4ab2-9e6b-50f29ed8360e';
   const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
     method: 'POST',
     headers: {
-      ...buildAuthHeaders('member-123'),
+      ...buildAuthHeaders(memberId),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({}),
   });
 
-  assert.equal(res.status, 400);
+  assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.error?.code, 'BAD_REQUEST');
-  assert.equal(typeof body.error?.message, 'string');
+  assert.equal(body.ok, true);
+
+  const params = new URLSearchParams(lastCheckoutBody);
+  assert.equal(params.get('client_reference_id'), memberId);
 });
 
 test('POST /api/checkout/session creates payment checkout session with client_reference_id', async () => {
@@ -871,31 +804,27 @@ test('POST /api/llm/respond returns standardized internal error when OpenAI retu
   assert.equal(body.error?.details, undefined);
 });
 
-test('POST /api/auth/exchange returns timeout error when external api call exceeds EXTERNAL_API_TIMEOUT_MS', async () => {
-
+test('POST /api/auth/exchange returns unauthorized when supabase token has wrong audience', async () => {
+  const token = createSupabaseAccessToken('mem_test_auth', { aud: 'wrong-audience' });
   const workerPath = path.resolve('dist', 'worker.js');
   const localMf = new Miniflare({
     scriptPath: workerPath,
     modules: true,
-    d1Databases: { DB: 'test-db-memberstack-timeout' },
-    bindings: {
-      ...buildEnvBindings(),
-      EXTERNAL_API_TIMEOUT_MS: '10',
-    },
+    d1Databases: { DB: 'test-db-supabase-aud' },
+    bindings: buildEnvBindings(),
   });
 
   try {
     const res = await localMf.dispatchFetch('http://localhost/api/auth/exchange', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: 'slow-memberstack-token' }),
+      body: JSON.stringify({ token }),
     });
 
-    assert.equal(res.status, 502);
+    assert.equal(res.status, 401);
     const body = await res.json();
     assert.equal(body.ok, false);
-    assert.equal(body.error?.code, 'INTERNAL_ERROR');
-    assert.equal(body.error?.message, 'memberstack api error');
+    assert.equal(body.error?.code, 'UNAUTHORIZED');
   } finally {
     await localMf.dispose();
   }

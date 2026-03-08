@@ -1,6 +1,6 @@
 import type { Env } from '../types/env.js';
 import type { CheckoutSessionCreateResponse } from '../types/api.js';
-import { badRequest, errorResponse, json, unauthorized } from "../lib/http.js";
+import { errorResponse, json, unauthorized } from "../lib/http.js";
 import { authenticateRequest } from '../lib/auth.js';
 import { fetchExternalApi } from '../lib/external_api.js';
 
@@ -41,11 +41,6 @@ export async function checkoutSessionCreateHandler({ request, env }: CheckoutSes
   if (!env.CHECKOUT_CANCEL_URL) missing.push("CHECKOUT_CANCEL_URL");
   if (missing.length) {
     return errorResponse('INTERNAL_ERROR', 'missing env', 500, { missing });
-  }
-
-  // Memberstack形式の検証（念のため）
-  if (!/^mem_[a-zA-Z0-9_]+$/.test(memberId)) {
-    return badRequest("invalid member_id format");
   }
 
   const mode = (env.STRIPE_CHECKOUT_MODE || "payment").trim();

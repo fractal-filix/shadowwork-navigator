@@ -6,9 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shadowwork Navigator - Dashboard</title>
 
-  <!-- Memberstack webflow package -->
-  <script data-memberstack-app="app_cmjuxbbd901ui0stg5njo7vx7"
-    src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
   <style>
     body {
@@ -163,7 +161,7 @@
   <div class="card">
     <div class="row">
       <div>
-        <div class="muted">member / user_id</div>
+        <div class="muted">member</div>
         <div id="memberLine" class="muted">checking...</div>
       </div>
       <div>
@@ -175,11 +173,11 @@
     <div style="height:12px"></div>
 
     <div class="row" id="loginRow" style="display:none;">
-      <a id="loginLink" data-ms-modal="login" href="#"
+      <a id="loginLink" href="/index.html#login"
         style="display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #ccc;text-decoration:none;color:#111;background:#fff;">
-        ログイン
+        ログインページへ
       </a>
-      <span class="muted">ログイン後にこのページをリロードしてください</span>
+      <span class="muted">ログイン後にこのページを再読込してください</span>
     </div>
 
     <div class="row">
@@ -240,38 +238,16 @@
       API_BASE,
       dbg,
       dbgErr,
-      qsUserIdUrl,
-      apiPaid
+      apiPaid,
+      getSupabaseUser
     } from "/lib/client.js";
 
-    function saveUserId(userId) {
-      const v = (userId || "").trim();
-      if (!v) return;
-      localStorage.setItem("user_id", v);
-    }
-
     async function getMemberAnyVersion() {
-      // Prefer v2 DOM package if present
       try {
-        const dom = window.$memberstackDom;
-        if (dom && typeof dom.getCurrentMember === "function") {
-          const { data: member } = await dom.getCurrentMember();
-          return member || null;
-        }
+        const user = await getSupabaseUser();
+        if (user) return { id: user.id, email: user.email || null };
       } catch (e) {
-        dbgErr("[member] v2 getCurrentMember failed", e);
-      }
-
-      // Fallback to v1 API (MemberStack.onReady)
-      try {
-        if (window.MemberStack && window.MemberStack.onReady) {
-          const member = await window.MemberStack.onReady;
-          if (member && member.loggedIn) return member;
-          return null;
-        }
-      } catch (e) {
-        dbgErr("[member] v1 onReady failed", e);
-        throw e;
+        dbgErr('[supabase] get user failed', e);
       }
       return null;
     }
@@ -290,8 +266,8 @@
       return { member: null, error: lastErr };
     }
 
-    async function apiGetState(userId) {
-      const url = `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(userId)}`;
+    async function apiGetState() {
+      const url = `${API_BASE}/api/thread/state`;
       dbg("[api] thread/state ->", url);
       const res = await fetch(url, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
@@ -299,9 +275,9 @@
       return data;
     }
 
-    async function apiRunStart(userId) {
-      dbg("[api] run/start ->", userId);
-      const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
+    async function apiRunStart() {
+      dbg("[api] run/start ->");
+      const res = await fetch(`${API_BASE}/api/run/start`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -313,9 +289,9 @@
       return data;
     }
 
-    async function apiRunRestart(userId) {
-      dbg("[api] run/restart ->", userId);
-      const res = await fetch(`${API_BASE}/api/run/restart?user_id=${encodeURIComponent(userId)}`, {
+    async function apiRunRestart() {
+      dbg("[api] run/restart ->");
+      const res = await fetch(`${API_BASE}/api/run/restart`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -327,9 +303,9 @@
       return data;
     }
 
-    async function apiThreadStart(userId) {
-      dbg("[api] thread/start ->", userId);
-      const res = await fetch(`${API_BASE}/api/thread/start?user_id=${encodeURIComponent(userId)}`, {
+    async function apiThreadStart() {
+      dbg("[api] thread/start ->");
+      const res = await fetch(`${API_BASE}/api/thread/start`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -342,27 +318,27 @@
     }
 
     // --- history APIs ---
-    async function apiRunsList(userId) {
-      dbg("[history] runs/list ->", userId);
-      const res = await fetch(`${API_BASE}/api/runs/list?user_id=${encodeURIComponent(userId)}`, { credentials: "include" });
+    async function apiRunsList() {
+      dbg("[history] runs/list ->");
+      const res = await fetch(`${API_BASE}/api/runs/list`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] runs/list <-", data);
       if (!res.ok) throw new Error(data?.error || "runs/list failed");
       return data; // { ok, runs: [...] }
     }
 
-    async function apiThreadsList(userId, runNo) {
-      dbg("[history] threads/list ->", { userId, runNo });
-      const res = await fetch(`${API_BASE}/api/threads/list?user_id=${encodeURIComponent(userId)}&run_no=${encodeURIComponent(runNo)}`, { credentials: "include" });
+    async function apiThreadsList(runNo) {
+      dbg("[history] threads/list ->", { runNo });
+      const res = await fetch(`${API_BASE}/api/threads/list?run_no=${encodeURIComponent(runNo)}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] threads/list <-", data);
       if (!res.ok) throw new Error(data?.error || "threads/list failed");
       return data; // { ok, run, threads: [...] }
     }
 
-    async function apiThreadMessages(userId, threadId) {
-      dbg("[history] thread/messages ->", { userId, threadId });
-      const res = await fetch(`${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(userId)}&thread_id=${encodeURIComponent(threadId)}`, { credentials: "include" });
+    async function apiThreadMessages(threadId) {
+      dbg("[history] thread/messages ->", { threadId });
+      const res = await fetch(`${API_BASE}/api/thread/messages?thread_id=${encodeURIComponent(threadId)}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] thread/messages <-", data);
       if (!res.ok) throw new Error(data?.error || "thread/messages failed");
@@ -457,27 +433,23 @@
       const { member, error } = await getMemberWithRetry({ tries: 30, waitMs: 100 });
       if (!member) {
         const msg = error?.message ? String(error.message) : "(no detail)";
-        memberLine.textContent = "未ログイン または Memberstack 初期化失敗";
-        hint.textContent = `止めました（自動リダイレクト無効）。原因: ${msg}`;
+        memberLine.textContent = "未ログイン または Supabase セッション未確立";
+        hint.textContent = `ログインが必要です。原因: ${msg}`;
         loginRow.style.display = "flex";
-        try { loginLink.click(); } catch (_) {}
-        // ここでは飛ばさず止める（原因が見えるように）
-        // location.href = "/index.html";
         return;
       }
 
-      // 2) user_id = member.id
+      // 2) user id from Supabase session
       const userId = (member.id || member["id"] || "").trim();
       if (!userId) {
         hint.textContent = "ログイン情報は取得できましたが、member.id が取得できませんでした。";
         return;
       }
-      saveUserId(userId);
       memberLine.innerHTML = `ログイン済み：<code>${userId}</code>`;
 
       try {
         // 3) paid required
-        const isPaid = await apiPaid(userId);
+        const isPaid = await apiPaid();
         if (!isPaid) {
           location.href = "/purchase.html";
           return;
@@ -527,7 +499,7 @@
       async function loadRunsAndSelect(defaultRunNo) {
         historyStatus.textContent = "runs 読み込み中...";
         dbg("[history] loadRunsAndSelect", { userId, defaultRunNo });
-        const data = await apiRunsList(userId);
+        const data = await apiRunsList();
         __runs = (data?.runs ?? [])
           .slice()
           .sort((a, b) => Number(b.run_no) - Number(a.run_no));
@@ -573,8 +545,8 @@
         }
 
         historyStatus.textContent = `threads 読み込み中 (run #${__selectedRunNo})...`;
-        dbg("[history] loadThreadsForSelectedRun", { userId, runNo: __selectedRunNo });
-        const data = await apiThreadsList(userId, __selectedRunNo);
+        dbg("[history] loadThreadsForSelectedRun", { runNo: __selectedRunNo });
+        const data = await apiThreadsList(__selectedRunNo);
         const threads = data?.threads ?? [];
         dbg("[history] threads count", threads.length);
 
@@ -611,7 +583,7 @@
               __selectedThreadId = t.id;
               dbg("[history] click thread", t.id);
 
-              const msgData = await apiThreadMessages(userId, t.id);
+              const msgData = await apiThreadMessages(t.id);
               const threadLabel = formatThreadLabel(msgData?.thread || t);
               messagesHeader.textContent = `${threadLabel} / thread_id=${t.id}`;
               renderMessages(msgData?.messages ?? []);
@@ -636,7 +608,7 @@
         statusLine.textContent = "loading...";
         hint.textContent = "";
 
-        const state = await apiGetState(userId);
+        const state = await apiGetState();
 
         const run = state?.run;
         const thread = state?.thread;
@@ -657,23 +629,23 @@
         primaryBtn.onclick = async () => {
           primaryBtn.disabled = true;
           hint.textContent = "処理中...";
-          dbg("[ui] primary click", { mode: p.mode, userId });
+          dbg("[ui] primary click", { mode: p.mode });
 
           try {
             if (p.mode === "START") {
-              await apiRunStart(userId);
-              await apiThreadStart(userId);
+              await apiRunStart();
+              await apiThreadStart();
               openApp();
               return;
             }
             if (p.mode === "RESTART") {
-              await apiRunRestart(userId);
-              await apiThreadStart(userId);
+              await apiRunRestart();
+              await apiThreadStart();
               openApp();
               return;
             }
             if (p.mode === "NEXT") {
-              await apiThreadStart(userId);
+              await apiThreadStart();
               openApp();
               return;
             }
@@ -700,7 +672,7 @@
       }
 
       async function refreshAll() {
-        dbg("[ui] refreshAll", { userId });
+        dbg("[ui] refreshAll");
         // Primary (state) -> History default run selection
         const state = await refreshPrimaryArea().catch((e) => {
           console.error(e);

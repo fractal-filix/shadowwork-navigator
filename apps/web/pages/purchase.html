@@ -6,9 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shadowwork Navigator - Purchase</title>
 
-  <!-- Memberstack webflow package -->
-  <script data-memberstack-app="app_cmjuxbbd901ui0stg5njo7vx7"
-    src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
   <style>
     body {
@@ -81,11 +79,10 @@
     <div class="muted">ログイン状態</div>
     <div id="memberBox" class="muted">checking...</div>
     <div style="height:8px"></div>
-    <!-- data attribute で Memberstack のログインモーダルを開ける（環境により v1/v2 どちらでも動く想定） -->
     <div class="row" id="loginRow" style="display:none;">
-      <a id="loginLink" data-ms-modal="login" href="#" class="btn-lite"
+      <a id="loginLink" href="/index.html#login" class="btn-lite"
         style="display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #ccc;text-decoration:none;color:#111;background:#fff;">
-        ログイン
+        ログインページへ
       </a>
       <span class="muted">ログイン後に自動で支払い状況を確認します</span>
     </div>
@@ -112,7 +109,7 @@
   </div>
 
   <script type="module">
-    import { API_BASE } from "/lib/client.js";
+    import { API_BASE, getSupabaseUser } from "/lib/client.js";
     const DEBUG_UI = false;
 
     // Checkout Session はAPIで生成してURLを受け取る（固定URLは不要）
@@ -128,14 +125,8 @@
     const $loginRow = document.getElementById("loginRow");
     const $loginLink = document.getElementById("loginLink");
 
-    function saveUserId(userId) {
-      const v = (userId || "").trim();
-      if (!v) return;
-      localStorage.setItem("user_id", v);
-    }
-
-    async function apiPaid(userId) {
-      const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
+    async function apiPaid() {
+      const url = `${API_BASE}/api/paid`;
       dbg("[api] paid ->", url);
       const res = await fetch(url, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
@@ -143,14 +134,14 @@
       return { ok: res.ok, data };
     }
 
-    async function apiCreateCheckoutSession(memberId) {
+    async function apiCreateCheckoutSession() {
       const url = `${API_BASE}/api/checkout/session`;
-      dbg("[api] checkout.session ->", url, memberId);
+      dbg("[api] checkout.session ->", url);
       const res = await fetch(url, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: memberId }),
+        body: "{}",
       });
       const data = await res.json().catch(() => ({}));
       dbg("[api] checkout.session <-", data);
@@ -163,27 +154,11 @@
     }
 
     async function getMemberAnyVersion() {
-      // Prefer v2 DOM package if present (some setups include both)
       try {
-        const dom = window.$memberstackDom;
-        if (dom && typeof dom.getCurrentMember === "function") {
-          const { data: member } = await dom.getCurrentMember();
-          return member || null;
-        }
+        const user = await getSupabaseUser();
+        if (user) return { id: user.id, email: user.email || null };
       } catch (e) {
-        dbgErr("[member] v2 getCurrentMember failed", e);
-      }
-
-      // Fallback to v1 API (MemberStack.onReady)
-      try {
-        if (window.MemberStack && window.MemberStack.onReady) {
-          const member = await window.MemberStack.onReady;
-          // v1: member.loggedIn true/false, member["id"] available when logged in
-          if (member && member.loggedIn) return member;
-          return null;
-        }
-      } catch (e) {
-        dbgErr("[member] v1 onReady failed", e);
+        dbgErr('[supabase] get user failed', e);
       }
       return null;
     }
@@ -193,8 +168,6 @@
       $loginRow.style.display = "flex";
       $checkPaidBtn.disabled = true;
       $toDashboardBtn.disabled = true;
-      // 自動でログインモーダルを開ける場合は開く（開けない環境でもボタンが出ているのでOK）
-      try { $loginLink.click(); } catch (_) { }
     }
 
     async function boot() {
@@ -215,14 +188,13 @@
         return;
       }
 
-      saveUserId(memberId);
       $memberBox.innerHTML = `ログイン済み：<code>${memberId}</code>`;
       $loginRow.style.display = "none";
       $checkPaidBtn.disabled = false;
       $toDashboardBtn.disabled = false;
 
       setStatus("status: checking paid...", "muted");
-      const r = await apiPaid(memberId);
+      const r = await apiPaid();
       if (!r.ok) {
         setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
         return;
@@ -236,16 +208,9 @@
     }
 
     $goCheckoutBtn.addEventListener("click", () => {
-      // member_id は localStorage に保存済み（boot()でsaveUserIdしてる）
       (async () => {
-        const memberId = (localStorage.getItem("user_id") || "").trim();
-        if (!memberId) {
-          setStatus("status: user_id が未確定です（ログインし直してください）", "ng");
-          showLoggedOutUI();
-          return;
-        }
         setStatus("status: checkout session を作成中...", "muted");
-        const r = await apiCreateCheckoutSession(memberId);
+        const r = await apiCreateCheckoutSession();
         if (!r.ok || !r.data?.url) {
           setStatus(`status: checkout session failed: ${JSON.stringify(r.data)}`, "ng");
           return;
@@ -260,13 +225,7 @@
     $checkPaidBtn.addEventListener("click", async () => {
       $checkPaidBtn.disabled = true;
       try {
-        const userId = (localStorage.getItem("user_id") || "").trim();
-        if (!userId) {
-          setStatus("status: user_id が未確定です（ログインし直してください）", "ng");
-          showLoggedOutUI();
-          return;
-        }
-        const r = await apiPaid(userId);
+        const r = await apiPaid();
         if (!r.ok) {
           setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
           return;
@@ -289,8 +248,6 @@
       location.href = "/dashboard.html";
     });
 
-    // ここは userId 未定義で落ちるので削除（必要なら localStorage から表示する）
-    // setStatus(`status: user_id=${localStorage.getItem("user_id") || "-"}`, "muted");
     // start
     boot().catch((e) => {
       dbgErr(e);

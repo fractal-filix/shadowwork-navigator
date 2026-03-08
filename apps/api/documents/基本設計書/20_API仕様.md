@@ -19,9 +19,10 @@
 本APIは、JWT による認証が必須です（`/api/auth/exchange` を除く）。  
 クライアントは以下の流れで認証を行います：
 
-1. `POST /api/auth/exchange` で Memberstack トークンを渡し、JWT（Cookie）を取得
-2. 以後の API リクエストでは、Cookie に含まれる JWT が自動的に送信される
-3. バックエンドは JWT の署名を検証し、`sub` クレーム（= memberId）を用いてユーザーを特定
+1. Supabase Auth でログインし、access token を取得する
+2. `POST /api/auth/exchange` で Supabase access token を渡し、内部JWT（Cookie）を取得する
+3. 以後の API リクエストでは、Cookie に含まれる JWT が自動的に送信される
+4. バックエンドは JWT の署名を検証し、`sub` クレーム（= Supabase user_id）を用いてユーザーを特定する
 
 **重要**: すべてのエンドポイントで、クライアントは `user_id` パラメータを送信してはいけません。  
 ユーザーIDはすべて JWT から確定されます（認証なしでは処理されません）。
@@ -85,7 +86,7 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 }
 ```
 
-上記 `502` は OpenAI/Stripe/Memberstack などの外部依存に起因する失敗を含む。  
+上記 `502` は OpenAI/Stripe/Supabase Auth などの外部依存に起因する失敗を含む。  
 外部API呼び出しのタイムアウト制御は `EXTERNAL_API_TIMEOUT_MS` に従う。
 
 ---
@@ -94,7 +95,7 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 
 ### 認証
 - `POST /api/auth/exchange`  
-  Memberstack トークンから JWT を発行。
+  Supabase access token を検証し、内部JWTを Cookie で返す。
 
 ### ヘルスチェック
 - `GET /`  
@@ -521,33 +522,34 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 
 ### POST /api/auth/exchange
 
-**目的**: Memberstack トークンから JWT（Access Token）を発行し、Cookie として返す。
+**目的**: Supabase access token を検証し、内部JWT（Access Token）を発行して Cookie として返す。
 
 **認証**: 不要（このエンドポイントのみ認証なし）
 
 **入力**（JSON）
 ```json
 {
-  "token": "memberstack-login-token-here"
+  "token": "supabase-access-token-here"
 }
 ```
-- `token`（必須）：Memberstack が発行したログイン証明トークン
+- `token`（必須）：Supabase Auth が発行した access token
 
 **処理**
-1. Memberstack API でトークンを検証し memberId を取得
+1. Supabase JWT を JWKS / issuer / audience で検証し、`sub` を取得
 2. 検証失敗時は 401 を返す
-3. JWT を以下の仕様で生成
+3. `sub` を内部JWTの `sub` として再発行する
 4. Cookie に設定して返す
 
 **出力**（JSON）
 ```json
 {
   "ok": true,
-  "member_id": "mem_xxxxx",
+  "member_id": "supabase-user-uuid",
   "token_type": "Bearer",
   "expires_in": 900
 }
 ```
+- `member_id` はレスポンス互換性のためのフィールド名であり、値は Supabase の `sub`（user_id）である。
 
 **Cookie設定**
 ```
@@ -562,7 +564,7 @@ Set-Cookie: access_token=<JWT>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-A
   "ok": false,
   "error": {
     "code": "UNAUTHORIZED",
-    "message": "Invalid Memberstack token"
+    "message": "supabase token verification failed"
   }
 }
 ```
@@ -570,7 +572,7 @@ Set-Cookie: access_token=<JWT>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-A
 **ステータスコード**
 - 200：成功
 - 400：リクエスト形式エラー（token がない等）
-- 401：認証失敗（Memberstack トークンが無効）
+- 401：認証失敗（Supabase access token が無効）
 - 500：サーバーエラー
 
 ---

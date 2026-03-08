@@ -4,10 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Shadowwork (Members)</title>
-
-  <!-- Memberstack webflow package -->
-  <script data-memberstack-app="app_cmjuxbbd901ui0stg5njo7vx7"
-    src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 </head>
 
 <body>
@@ -24,7 +21,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import { API_BASE, apiPaid, qsUserIdUrl } from "/lib/client.js";
+    import { API_BASE, apiPaid, getSupabaseUser } from "/lib/client.js";
     const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
     const $log = document.getElementById("log");
@@ -35,33 +32,12 @@
 
     function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
 
-    function saveUserId(userId) {
-      const v = (userId || "").trim();
-      if (!v) return;
-      localStorage.setItem("user_id", v);
-    }
-
     async function getMemberAnyVersion() {
-      // Prefer v2 DOM package if present
       try {
-        const dom = window.$memberstackDom;
-        if (dom && typeof dom.getCurrentMember === "function") {
-          const { data: member } = await dom.getCurrentMember();
-          return member || null;
-        }
+        const user = await getSupabaseUser();
+        if (user) return { id: user.id, email: user.email || null };
       } catch (e) {
-        dbgErr("[member] v2 getCurrentMember failed", e);
-      }
-
-      // Fallback to v1 API (MemberStack.onReady)
-      try {
-        if (window.MemberStack && window.MemberStack.onReady) {
-          const member = await window.MemberStack.onReady;
-          if (member && member.loggedIn) return member;
-          return null;
-        }
-      } catch (e) {
-        dbgErr("[member] v1 onReady failed", e);
+        dbgErr('[supabase] get user failed', e);
       }
       return null;
     }
@@ -88,10 +64,7 @@
     }
 
     async function fetchState() {
-      const res = await fetch(
-        `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-        { method: "GET", credentials: "include" }
-      );
+      const res = await fetch(`${API_BASE}/api/thread/state`, { method: "GET", credentials: "include" });
       const json = await res.json();
       console.log("[thread/state]", json);
 
@@ -108,7 +81,7 @@
 
     async function apiThreadMessages(threadId) {
       const res = await fetch(
-        `${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(USER_ID)}&thread_id=${encodeURIComponent(threadId)}`,
+        `${API_BASE}/api/thread/messages?thread_id=${encodeURIComponent(threadId)}`,
         { method: "GET", credentials: "include" }
       );
       const data = await res.json().catch(() => ({}));
@@ -168,10 +141,7 @@
       }
 
       // なければ作る
-      const res = await fetch(
-        `${API_BASE}/api/thread/start?user_id=${encodeURIComponent(USER_ID)}`,
-        { method: "POST", credentials: "include" }
-      );
+      const res = await fetch(`${API_BASE}/api/thread/start`, { method: "POST", credentials: "include" });
       const json = await res.json();
       console.log("[thread/start]", json);
 
@@ -204,7 +174,7 @@
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: USER_ID }),
+        body: "{}",
       });
       const json = await res.json().catch(() => ({}));
       console.log("[thread/close]", json);
@@ -229,10 +199,7 @@
 
     let __BOOT_PROMISE__ = null;
 
-    // Memberstack login -> USER_ID 確定
-    let USER_ID = null;
-
-    async function ensureUserId() {
+    async function ensureUserSession() {
       const member = await getMemberAnyVersion();
       if (!member) {
         location.href = "/index.html";
@@ -243,7 +210,6 @@
         $debug.textContent = "member.id が取得できませんでした";
         return null;
       }
-      saveUserId(id);
       return id;
     }
 
@@ -251,20 +217,17 @@
       if (__BOOT_PROMISE__) return __BOOT_PROMISE__;
       __BOOT_PROMISE__ = (async () => {
         try {
-          USER_ID = await ensureUserId();
-          if (!USER_ID) return;
+          const userId = await ensureUserSession();
+          if (!userId) return;
 
           // paid gate: 未決済なら purchase に飛ばす
-          const isPaid = await apiPaid(USER_ID);
+          const isPaid = await apiPaid();
           if (!isPaid) {
             location.href = "/purchase.html";
             return;
           }
 
-          const res = await fetch(
-            `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-            { method: "GET", credentials: "include" }
-          );
+          const res = await fetch(`${API_BASE}/api/thread/state`, { method: "GET", credentials: "include" });
           const st = await res.json();
           console.log("[thread/state:init]", st);
 
@@ -334,7 +297,7 @@
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: USER_ID, message }),
+          body: JSON.stringify({ message }),
         });
 
         const data = await res.json().catch(() => ({}));
