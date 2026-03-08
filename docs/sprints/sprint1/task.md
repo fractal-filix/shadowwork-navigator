@@ -86,7 +86,7 @@
 - [x] 1.3.4 Collection作成（embedding次元/距離関数）（3pt）
 - [x] 1.3.5 Workersから疎通できるURL/TLS要件を確認（2pt）
 	- 確認結果: `curl.exe --ssl-no-revoke -i "$env:QDRANT_URL/collections" -H "api-key: $env:QDRANT_API_KEY"` で 200 OK と collection 一覧を確認
-- [ ] 1.5.1.5 OPENAI_API_KEY を登録（2pt）
+- [x] 1.5.1.5 OPENAI_API_KEY を登録（2pt）
 - [x] 1.5.1.6 QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION を登録（2pt）
 
 ## 2026.03.06
