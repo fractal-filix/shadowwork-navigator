@@ -90,15 +90,22 @@
 - [x] 1.5.1.6 QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION を登録（2pt）
 
 ## 2026.03.06
-- [ ] 1.5.1.7 KMS連携用のAWS資格情報/設定を登録（3pt）
-- [ ] 1.5.1.7.1 AWS_REGION（1pt）
-- [ ] 1.5.1.7.2 AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY（2pt）
-- [ ] 1.5.1.7.3 （必要なら）AWS_SESSION_TOKEN（1pt）
-- [ ] 1.5.1.7.4 KMS_KEY_ID（2pt）
+- [x] 1.5.1.7 KMS連携用のAWS資格情報/設定を登録（3pt）
+	- 確認手順: `cd apps/api && pnpm exec wrangler secret list --env staging && pnpm exec wrangler secret list --env production`
+	- 確認結果: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `KMS_KEY_ID` を staging/production 両方で確認
+	- 補足: `ASSUME_ROLE_ARN` も staging/production 両方で確認（`dek_unseal` 実装の必須設定）
+- [x] 1.5.1.7.1 AWS_REGION（1pt）
+- [x] 1.5.1.7.2 AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY（2pt）
+- [-] 1.5.1.7.3 （必要なら）AWS_SESSION_TOKEN（1pt）※現時点は未登録。`ASSUME_ROLE_ARN` で運用可能なため任意スキップ（必要時に追加）
+- [x] 1.5.1.7.4 KMS_KEY_ID（2pt）
+	- 補足: Cloudflare Dashboard（Web UI）で目視確認し、secret 名の先頭スペースは無し（CLI出力上の見え方による誤認としてクローズ）。
 
-- [ ] 1.6.3 DDLの適用手順を確立（3pt）
-- [ ] 1.6.3.1 開発環境: apps/api/scripts/recreate-d1.ps1 でD1再作成＋DDL適用（破壊的なので開発のみ）（2pt）
-- [ ] 1.6.3.2 staging/production: 既存DBへ安全にDDL差分を適用（破壊的操作はしない）（4pt）
+- [x] 1.6.3 DDLの適用手順を確立（3pt）
+	- 手順書: `docs/sprints/sprint1/runbook_20260306.md`
+- [x] 1.6.3.1 開発環境: apps/api/scripts/recreate-d1.ps1 でD1再作成＋DDL適用（破壊的なので開発のみ）（2pt）
+	- 実行コマンドと確認コマンドを runbook に固定化
+- [x] 1.6.3.2 staging/production: 既存DBへ安全にDDL差分を適用（破壊的操作はしない）（4pt）
+	- `wrangler d1 execute --file` での非破壊差分適用フロー（staging→production）を runbook に固定化
 
 ## 2026.03.07
 - [ ] 2.1 API: /api/auth/exchange を Supabase JWT 検証に置換（4pt）
