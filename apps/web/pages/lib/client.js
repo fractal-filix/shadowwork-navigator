@@ -54,3 +54,30 @@ export async function apiPaid(userId) {
   }
   return !!data.paid;
 }
+
+export function createSupabaseClient() {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+    if ((window).__SUPABASE_CLIENT__) return (window).__SUPABASE_CLIENT__;
+    if (window.supabase && typeof window.supabase.createClient === "function") {
+      (window).__SUPABASE_CLIENT__ = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      return (window).__SUPABASE_CLIENT__;
+    }
+    return null;
+  } catch (e) {
+    dbgErr('[supabase] create client failed', e);
+    return null;
+  }
+}
+
+export async function getSupabaseUser() {
+  const client = createSupabaseClient();
+  if (!client) return null;
+  try {
+    const r = await client.auth.getUser();
+    return r?.data?.user ?? null;
+  } catch (e) {
+    dbgErr('[supabase] getUser failed', e);
+    return null;
+  }
+}

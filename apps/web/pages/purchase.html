@@ -6,9 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shadowwork Navigator - Purchase</title>
 
-  <!-- Memberstack webflow package -->
-  <script data-memberstack-app="app_cmjuxbbd901ui0stg5njo7vx7"
-    src="https://static.memberstack.com/scripts/v2/memberstack.js" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
   <style>
     body {
@@ -112,7 +110,7 @@
   </div>
 
   <script type="module">
-    import { API_BASE } from "/lib/client.js";
+    import { API_BASE, getSupabaseUser } from "/lib/client.js";
     const DEBUG_UI = false;
 
     // Checkout Session はAPIで生成してURLを受け取る（固定URLは不要）
@@ -163,28 +161,15 @@
     }
 
     async function getMemberAnyVersion() {
-      // Prefer v2 DOM package if present (some setups include both)
       try {
-        const dom = window.$memberstackDom;
-        if (dom && typeof dom.getCurrentMember === "function") {
-          const { data: member } = await dom.getCurrentMember();
-          return member || null;
-        }
+        const user = await getSupabaseUser();
+        if (user) return { id: user.id, email: user.email || null };
       } catch (e) {
-        dbgErr("[member] v2 getCurrentMember failed", e);
+        dbgErr('[supabase] get user failed', e);
       }
 
-      // Fallback to v1 API (MemberStack.onReady)
-      try {
-        if (window.MemberStack && window.MemberStack.onReady) {
-          const member = await window.MemberStack.onReady;
-          // v1: member.loggedIn true/false, member["id"] available when logged in
-          if (member && member.loggedIn) return member;
-          return null;
-        }
-      } catch (e) {
-        dbgErr("[member] v1 onReady failed", e);
-      }
+      const stored = localStorage.getItem('user_id');
+      if (stored && stored.trim()) return { id: stored.trim() };
       return null;
     }
 
