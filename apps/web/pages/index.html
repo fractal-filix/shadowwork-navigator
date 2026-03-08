@@ -40,6 +40,61 @@
     footer a {
       margin-right: 12px;
     }
+
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 24px;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      min-width: 280px;
+      max-width: 100%;
+    }
+
+    button,
+    .button-link {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .button-link.secondary,
+    button.secondary {
+      background: #fff;
+      color: #111;
+      border-color: #ccc;
+    }
+
+    .muted {
+      color: #666;
+    }
+
+    .ok {
+      color: #0a7a2f;
+      font-weight: 600;
+    }
+
+    .ng {
+      color: #b00020;
+      font-weight: 600;
+    }
   </style>
 </head>
 
@@ -78,11 +133,113 @@
     <a href="/dashboard.html">会員ページへ（Dashboard）</a>
   </p>
 
+  <div class="card" id="authCard">
+    <h2 style="margin-top:0;">ログイン</h2>
+    <p class="muted">Supabase の Email + Password でログインします。</p>
+
+    <div id="authStatus" class="muted">checking...</div>
+    <div style="height:12px"></div>
+
+    <form id="loginForm">
+      <div class="row">
+        <input id="email" type="email" placeholder="email" autocomplete="email" required />
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <input id="password" type="password" placeholder="password" autocomplete="current-password" required />
+      </div>
+      <div style="height:12px"></div>
+      <div class="row">
+        <button id="loginBtn" type="submit">ログイン</button>
+        <button id="logoutBtn" type="button" class="secondary" style="display:none;">ログアウト</button>
+        <a href="/dashboard.html" class="button-link secondary">Dashboardへ</a>
+      </div>
+    </form>
+  </div>
+
   <footer>
     <a href="/tokushoho.html">特定商取引法に基づく表記</a>
     <a href="/privacy.html">プライバシーポリシー</a>
     <a href="/terms.html">利用規約</a>
   </footer>
+
+  <script type="module">
+    import {
+      getSupabaseUser,
+      hasSupabaseConfig,
+      signInWithPassword,
+      signOutSupabase,
+    } from "/lib/client.js";
+
+    const $authStatus = document.getElementById("authStatus");
+    const $loginForm = document.getElementById("loginForm");
+    const $email = document.getElementById("email");
+    const $password = document.getElementById("password");
+    const $loginBtn = document.getElementById("loginBtn");
+    const $logoutBtn = document.getElementById("logoutBtn");
+
+    function setStatus(text, kind = "muted") {
+      $authStatus.className = kind;
+      $authStatus.textContent = text;
+    }
+
+    async function refreshAuthState() {
+      if (!hasSupabaseConfig()) {
+        setStatus("Supabase 設定が不足しています。Console で SHADOWNAV_SUPABASE_URL / SHADOWNAV_SUPABASE_PUBLISHABLE_KEY を設定してください。", "ng");
+        $logoutBtn.style.display = "none";
+        return;
+      }
+
+      const user = await getSupabaseUser();
+      if (!user) {
+        setStatus("未ログインです。Email / Password でログインしてください。", "muted");
+        $logoutBtn.style.display = "none";
+        return;
+      }
+
+      localStorage.setItem("user_id", user.id);
+      setStatus(`ログイン済み: ${user.email || user.id}`, "ok");
+      $logoutBtn.style.display = "inline-block";
+    }
+
+    $loginForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      $loginBtn.disabled = true;
+      setStatus("ログイン中...", "muted");
+
+      try {
+        await signInWithPassword($email.value.trim(), $password.value);
+        $password.value = "";
+        await refreshAuthState();
+      } catch (error) {
+        setStatus(`ログイン失敗: ${String(error?.message || error)}`, "ng");
+      } finally {
+        $loginBtn.disabled = false;
+      }
+    });
+
+    $logoutBtn.addEventListener("click", async () => {
+      $logoutBtn.disabled = true;
+      try {
+        await signOutSupabase();
+        localStorage.removeItem("user_id");
+        setStatus("ログアウトしました。", "muted");
+        await refreshAuthState();
+      } catch (error) {
+        setStatus(`ログアウト失敗: ${String(error?.message || error)}`, "ng");
+      } finally {
+        $logoutBtn.disabled = false;
+      }
+    });
+
+    if (location.hash === "#login") {
+      setTimeout(() => $email.focus(), 0);
+    }
+
+    refreshAuthState().catch((error) => {
+      setStatus(`初期化失敗: ${String(error?.message || error)}`, "ng");
+    });
+  </script>
 </body>
 
 </html>

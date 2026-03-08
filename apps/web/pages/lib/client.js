@@ -21,6 +21,23 @@ export function dbgErr(...args) {
   if (DEBUG_UI) console.error(...args);
 }
 
+function normalizeSupabaseUrl(rawValue) {
+  const value = (rawValue || "").trim();
+  if (!value) return "";
+
+  let normalized = value;
+  if (/^https\/\//i.test(normalized)) {
+    normalized = normalized.replace(/^https\/\//i, "https://");
+  } else if (/^http\/\//i.test(normalized)) {
+    normalized = normalized.replace(/^http\/\//i, "http://");
+  } else if (!/^https?:\/\//i.test(normalized)) {
+    normalized = `https://${normalized.replace(/^\/+/, "")}`;
+  }
+
+  const url = new URL(normalized);
+  return url.origin;
+}
+
 export function getUserId() {
   const qs = new URLSearchParams(location.search);
   const q = qs.get("user_id");
@@ -62,9 +79,10 @@ export async function apiPaid(userId) {
 export function createSupabaseClient() {
   try {
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return null;
+    const normalizedSupabaseUrl = normalizeSupabaseUrl(SUPABASE_URL);
     if ((window).__SUPABASE_CLIENT__) return (window).__SUPABASE_CLIENT__;
     if (window.supabase && typeof window.supabase.createClient === "function") {
-      (window).__SUPABASE_CLIENT__ = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+      (window).__SUPABASE_CLIENT__ = window.supabase.createClient(normalizedSupabaseUrl, SUPABASE_PUBLISHABLE_KEY);
       return (window).__SUPABASE_CLIENT__;
     }
     return null;
@@ -84,4 +102,31 @@ export async function getSupabaseUser() {
     dbgErr('[supabase] getUser failed', e);
     return null;
   }
+}
+
+export function hasSupabaseConfig() {
+  return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
+}
+
+export async function signInWithPassword(email, password) {
+  const client = createSupabaseClient();
+  if (!client) {
+    throw new Error("supabase config missing");
+  }
+
+  const { data, error } = await client.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function signOutSupabase() {
+  const client = createSupabaseClient();
+  if (!client) return;
+
+  const { error } = await client.auth.signOut();
+  if (error) throw error;
 }

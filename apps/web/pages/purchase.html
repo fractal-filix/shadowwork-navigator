@@ -79,11 +79,10 @@
     <div class="muted">ログイン状態</div>
     <div id="memberBox" class="muted">checking...</div>
     <div style="height:8px"></div>
-    <!-- data attribute で Memberstack のログインモーダルを開ける（環境により v1/v2 どちらでも動く想定） -->
     <div class="row" id="loginRow" style="display:none;">
-      <a id="loginLink" data-ms-modal="login" href="#" class="btn-lite"
+      <a id="loginLink" href="/index.html#login" class="btn-lite"
         style="display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #ccc;text-decoration:none;color:#111;background:#fff;">
-        ログイン
+        ログインページへ
       </a>
       <span class="muted">ログイン後に自動で支払い状況を確認します</span>
     </div>
@@ -178,8 +177,6 @@
       $loginRow.style.display = "flex";
       $checkPaidBtn.disabled = true;
       $toDashboardBtn.disabled = true;
-      // 自動でログインモーダルを開ける場合は開く（開けない環境でもボタンが出ているのでOK）
-      try { $loginLink.click(); } catch (_) { }
     }
 
     async function boot() {

@@ -173,11 +173,11 @@
     <div style="height:12px"></div>
 
     <div class="row" id="loginRow" style="display:none;">
-      <a id="loginLink" data-ms-modal="login" href="#"
+      <a id="loginLink" href="/index.html#login"
         style="display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #ccc;text-decoration:none;color:#111;background:#fff;">
-        ログイン
+        ログインページへ
       </a>
-      <span class="muted">ログイン後にこのページをリロードしてください</span>
+      <span class="muted">ログイン後にこのページを再読込してください</span>
     </div>
 
     <div class="row">
@@ -444,12 +444,9 @@
       const { member, error } = await getMemberWithRetry({ tries: 30, waitMs: 100 });
       if (!member) {
         const msg = error?.message ? String(error.message) : "(no detail)";
-        memberLine.textContent = "未ログイン または Memberstack 初期化失敗";
-        hint.textContent = `止めました（自動リダイレクト無効）。原因: ${msg}`;
+        memberLine.textContent = "未ログイン または Supabase セッション未確立";
+        hint.textContent = `ログインが必要です。原因: ${msg}`;
         loginRow.style.display = "flex";
-        try { loginLink.click(); } catch (_) {}
-        // ここでは飛ばさず止める（原因が見えるように）
-        // location.href = "/index.html";
         return;
       }
 
