@@ -197,7 +197,6 @@
         return;
       }
 
-      localStorage.setItem("user_id", user.id);
       setStatus(`ログイン済み: ${user.email || user.id}`, "ok");
       $logoutBtn.style.display = "inline-block";
     }
@@ -222,7 +221,6 @@
       $logoutBtn.disabled = true;
       try {
         await signOutSupabase();
-        localStorage.removeItem("user_id");
         setStatus("ログアウトしました。", "muted");
         await refreshAuthState();
       } catch (error) {

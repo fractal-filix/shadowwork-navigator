@@ -161,7 +161,7 @@
   <div class="card">
     <div class="row">
       <div>
-        <div class="muted">member / user_id</div>
+        <div class="muted">member</div>
         <div id="memberLine" class="muted">checking...</div>
       </div>
       <div>
@@ -242,12 +242,6 @@
       getSupabaseUser
     } from "/lib/client.js";
 
-    function saveUserId(userId) {
-      const v = (userId || "").trim();
-      if (!v) return;
-      localStorage.setItem("user_id", v);
-    }
-
     async function getMemberAnyVersion() {
       try {
         const user = await getSupabaseUser();
@@ -255,10 +249,6 @@
       } catch (e) {
         dbgErr('[supabase] get user failed', e);
       }
-
-      // Fallback: check localStorage
-      const stored = localStorage.getItem('user_id');
-      if (stored && stored.trim()) return { id: stored.trim() };
       return null;
     }
 
@@ -449,13 +439,12 @@
         return;
       }
 
-      // 2) user_id = member.id
+      // 2) user id from Supabase session
       const userId = (member.id || member["id"] || "").trim();
       if (!userId) {
         hint.textContent = "ログイン情報は取得できましたが、member.id が取得できませんでした。";
         return;
       }
-      saveUserId(userId);
       memberLine.innerHTML = `ログイン済み：<code>${userId}</code>`;
 
       try {

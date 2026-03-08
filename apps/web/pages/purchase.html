@@ -125,12 +125,6 @@
     const $loginRow = document.getElementById("loginRow");
     const $loginLink = document.getElementById("loginLink");
 
-    function saveUserId(userId) {
-      const v = (userId || "").trim();
-      if (!v) return;
-      localStorage.setItem("user_id", v);
-    }
-
     async function apiPaid() {
       const url = `${API_BASE}/api/paid`;
       dbg("[api] paid ->", url);
@@ -140,14 +134,14 @@
       return { ok: res.ok, data };
     }
 
-    async function apiCreateCheckoutSession(memberId) {
+    async function apiCreateCheckoutSession() {
       const url = `${API_BASE}/api/checkout/session`;
-      dbg("[api] checkout.session ->", url, memberId);
+      dbg("[api] checkout.session ->", url);
       const res = await fetch(url, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: memberId }),
+        body: "{}",
       });
       const data = await res.json().catch(() => ({}));
       dbg("[api] checkout.session <-", data);
@@ -166,9 +160,6 @@
       } catch (e) {
         dbgErr('[supabase] get user failed', e);
       }
-
-      const stored = localStorage.getItem('user_id');
-      if (stored && stored.trim()) return { id: stored.trim() };
       return null;
     }
 
@@ -197,7 +188,6 @@
         return;
       }
 
-      saveUserId(memberId);
       $memberBox.innerHTML = `ログイン済み：<code>${memberId}</code>`;
       $loginRow.style.display = "none";
       $checkPaidBtn.disabled = false;
@@ -218,16 +208,9 @@
     }
 
     $goCheckoutBtn.addEventListener("click", () => {
-      // member_id は localStorage に保存済み（boot()でsaveUserIdしてる）
       (async () => {
-        const memberId = (localStorage.getItem("user_id") || "").trim();
-        if (!memberId) {
-          setStatus("status: user_id が未確定です（ログインし直してください）", "ng");
-          showLoggedOutUI();
-          return;
-        }
         setStatus("status: checkout session を作成中...", "muted");
-        const r = await apiCreateCheckoutSession(memberId);
+        const r = await apiCreateCheckoutSession();
         if (!r.ok || !r.data?.url) {
           setStatus(`status: checkout session failed: ${JSON.stringify(r.data)}`, "ng");
           return;
@@ -242,12 +225,6 @@
     $checkPaidBtn.addEventListener("click", async () => {
       $checkPaidBtn.disabled = true;
       try {
-        const userId = (localStorage.getItem("user_id") || "").trim();
-        if (!userId) {
-          setStatus("status: user_id が未確定です（ログインし直してください）", "ng");
-          showLoggedOutUI();
-          return;
-        }
         const r = await apiPaid();
         if (!r.ok) {
           setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
@@ -271,8 +248,6 @@
       location.href = "/dashboard.html";
     });
 
-    // ここは userId 未定義で落ちるので削除（必要なら localStorage から表示する）
-    // setStatus(`status: user_id=${localStorage.getItem("user_id") || "-"}`, "muted");
     // start
     boot().catch((e) => {
       dbgErr(e);

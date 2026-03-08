@@ -32,24 +32,13 @@
 
     function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
 
-    function saveUserId(userId) {
-      const v = (userId || "").trim();
-      if (!v) return;
-      localStorage.setItem("user_id", v);
-    }
-
     async function getMemberAnyVersion() {
-      // Try Supabase auth first
       try {
         const user = await getSupabaseUser();
         if (user) return { id: user.id, email: user.email || null };
       } catch (e) {
         dbgErr('[supabase] get user failed', e);
       }
-
-      // Fallback: use stored user_id if present
-      const stored = localStorage.getItem('user_id');
-      if (stored && stored.trim()) return { id: stored.trim() };
       return null;
     }
 
@@ -185,7 +174,7 @@
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: USER_ID }),
+        body: "{}",
       });
       const json = await res.json().catch(() => ({}));
       console.log("[thread/close]", json);
@@ -210,10 +199,7 @@
 
     let __BOOT_PROMISE__ = null;
 
-    // Supabase login -> USER_ID 確定
-    let USER_ID = null;
-
-    async function ensureUserId() {
+    async function ensureUserSession() {
       const member = await getMemberAnyVersion();
       if (!member) {
         location.href = "/index.html";
@@ -224,7 +210,6 @@
         $debug.textContent = "member.id が取得できませんでした";
         return null;
       }
-      saveUserId(id);
       return id;
     }
 
@@ -232,8 +217,8 @@
       if (__BOOT_PROMISE__) return __BOOT_PROMISE__;
       __BOOT_PROMISE__ = (async () => {
         try {
-          USER_ID = await ensureUserId();
-          if (!USER_ID) return;
+          const userId = await ensureUserSession();
+          if (!userId) return;
 
           // paid gate: 未決済なら purchase に飛ばす
           const isPaid = await apiPaid();
@@ -312,7 +297,7 @@
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: USER_ID, message }),
+          body: JSON.stringify({ message }),
         });
 
         const data = await res.json().catch(() => ({}));
