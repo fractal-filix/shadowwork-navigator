@@ -126,6 +126,12 @@ before(async () => {
           return;
         }
 
+        if (parsed.token === 'valid-memberstack-token-nested') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ data: { member: { id: 'mem_test_auth_nested' } } }));
+          return;
+        }
+
         if (parsed.token === 'slow-memberstack-token') {
           setTimeout(() => {
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -427,6 +433,22 @@ test('POST /api/auth/exchange succeeds and sets JWT cookie', async () => {
   const setCookie = res.headers.get('Set-Cookie') || '';
   assert.match(setCookie, /access_token=/);
   assert.match(setCookie, /HttpOnly/);
+  assert.match(setCookie, /Secure/);
+  assert.match(setCookie, /SameSite=Strict/);
+  assert.match(setCookie, /Path=\//);
+});
+
+test('POST /api/auth/exchange succeeds when member id is nested in verify response', async () => {
+  const res = await mf.dispatchFetch('http://localhost/api/auth/exchange', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: 'valid-memberstack-token-nested' }),
+  });
+
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.member_id, 'mem_test_auth_nested');
 });
 
 test('POST /api/auth/exchange returns unauthorized for invalid memberstack token', async () => {
@@ -499,6 +521,59 @@ test('worker returns standardized internal error for invalid production memberst
   }
 });
 
+test('worker allows non-live memberstack key in production when override is enabled', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-worker-override' },
+    bindings: {
+      ...buildEnvBindings(),
+      APP_ENV: 'production',
+      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
+      ALLOW_NON_LIVE_MEMBERSTACK_KEY: 'true',
+    },
+  });
+
+  try {
+    const res = await localMf.dispatchFetch('http://localhost/');
+    assert.equal(res.status, 200);
+  } finally {
+    await localMf.dispose();
+  }
+});
+
+test('OPTIONS preflight is allowed even when production memberstack secret is invalid', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-worker-options' },
+    bindings: {
+      ...buildEnvBindings(),
+      APP_ENV: 'production',
+      MEMBERSTACK_SECRET_KEY: 'sk_test_member',
+    },
+  });
+
+  try {
+    const res = await localMf.dispatchFetch('http://localhost/api/auth/exchange', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:3000',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    });
+
+    assert.equal(res.status, 204);
+    assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
+    assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
+  } finally {
+    await localMf.dispose();
+  }
+});
+
 test('CORS blocks request when Origin is not in allowlist', async () => {
   const res = await mf.dispatchFetch('http://localhost/', {
     method: 'GET',
@@ -512,6 +587,33 @@ test('CORS blocks request when Origin is not in allowlist', async () => {
   assert.equal(body.ok, false);
   assert.equal(body.error?.code, 'FORBIDDEN');
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+test('CORS echoes allowed Origin and allows credentials', async () => {
+  const res = await mf.dispatchFetch('http://localhost/', {
+    method: 'GET',
+    headers: {
+      Origin: 'http://localhost:3000',
+    },
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
+  assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
+});
+
+test('OPTIONS preflight for allowed Origin returns CORS headers', async () => {
+  const res = await mf.dispatchFetch('http://localhost/api/paid', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'http://localhost:3000',
+    },
+  });
+
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'http://localhost:3000');
+  assert.equal(res.headers.get('Access-Control-Allow-Credentials'), 'true');
+  assert.match(res.headers.get('Access-Control-Allow-Methods') || '', /OPTIONS/);
 });
 
 test('CORS fails closed when ALLOWED_ORIGINS is empty', async () => {

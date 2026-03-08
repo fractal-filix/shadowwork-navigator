@@ -111,8 +111,8 @@
     <div id="status" class="muted">status: -</div>
   </div>
 
-  <script>
-    const API_BASE = "https://filix-shadowwork-api.xxxhideyoxxx.workers.dev";
+  <script type="module">
+    import { API_BASE } from "/lib/client.js";
     const DEBUG_UI = false;
 
     // Checkout Session はAPIで生成してURLを受け取る（固定URLは不要）
@@ -137,7 +137,7 @@
     async function apiPaid(userId) {
       const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
       dbg("[api] paid ->", url);
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[api] paid <-", data);
       return { ok: res.ok, data };
@@ -148,6 +148,7 @@
       dbg("[api] checkout.session ->", url, memberId);
       const res = await fetch(url, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ member_id: memberId }),
       });

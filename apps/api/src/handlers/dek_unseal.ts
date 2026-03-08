@@ -1,0 +1,119 @@
+import type { Env } from '../types/env.js';
+import { json, badRequest, methodNotAllowed, unauthorized, forbidden, internalError } from '../lib/http.js';
+import { authenticateRequest } from '../lib/auth.js';
+import { getUserPaidFlag } from '../lib/paid.js';
+import { assumeRole, kmsDecrypt } from '../lib/aws_kms.js';
+
+interface DekUnsealRequestBody {
+  wrapped_key?: unknown;
+  wrapped_key_kid?: unknown;
+  wrapped_key_alg?: unknown;
+  thread_id?: unknown;
+  message_id?: unknown;
+  reason?: unknown;
+}
+
+export async function dekUnsealHandler({ request, env }: { request: Request; env: Env }): Promise<Response> {
+  if (request.method !== 'POST') return methodNotAllowed();
+
+  const authContext = await authenticateRequest(request, env.JWT_SIGNING_SECRET, env);
+  if (!authContext) return unauthorized('Invalid or missing JWT');
+
+  const user_id = authContext.memberId;
+
+  const isPaid = await getUserPaidFlag(env, user_id);
+  if (!isPaid) return forbidden('Paid access required');
+
+  let body: DekUnsealRequestBody = {};
+  try {
+    body = await request.json() as DekUnsealRequestBody;
+  } catch {
+    return badRequest('invalid json');
+  }
+
+  const wrappedKey = typeof body.wrapped_key === 'string' ? body.wrapped_key.trim() : '';
+  const kid = typeof body.wrapped_key_kid === 'string' ? body.wrapped_key_kid.trim() : '';
+  const alg = typeof body.wrapped_key_alg === 'string' ? body.wrapped_key_alg.trim() : '';
+  const thread_id = typeof body.thread_id === 'string' ? body.thread_id.trim() : '';
+  const message_id = typeof body.message_id === 'string' ? body.message_id.trim() : '';
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+
+  if (!wrappedKey) return badRequest('wrapped_key is required');
+  if (!kid) return badRequest('wrapped_key_kid is required');
+  if (!alg) return badRequest('wrapped_key_alg is required');
+  if (!thread_id) return badRequest('thread_id is required');
+  if (!message_id) return badRequest('message_id is required');
+
+  if (alg !== 'RSAES_OAEP_SHA_256' && alg !== 'RSAES_OAEP_SHA_1') {
+    return badRequest('wrapped_key_alg must be RSAES_OAEP_SHA_256 or RSAES_OAEP_SHA_1');
+  }
+
+  // ここで監査ログを記録（まずは Cloudflare Workers のログ）
+  console.info('DekUnseal requested', {
+    user_id,
+    thread_id,
+    message_id,
+    kid,
+    alg,
+    reason: reason ? '[REDACTED]' : undefined,
+  });
+
+  if (!env.AWS_ACCESS_KEY_ID || !env.AWS_SECRET_ACCESS_KEY) {
+    return internalError('Decrypt not available: missing AWS credentials in environment');
+  }
+
+  const region = env.AWS_REGION?.trim() || 'ap-southeast-2';
+  const roleArn = env.ASSUME_ROLE_ARN?.trim();
+  if (!roleArn) {
+    return internalError('Decrypt not available: missing ASSUME_ROLE_ARN');
+  }
+
+  const roleSessionName = env.ASSUME_ROLE_SESSION_NAME?.trim() || 'shadownav-dek-unseal';
+
+  try {
+    const assumed = await assumeRole(
+      {
+        accessKeyId: env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+        sessionToken: env.AWS_SESSION_TOKEN,
+      },
+      roleArn,
+      roleSessionName,
+      region,
+      900
+    );
+
+    const decrypted = await kmsDecrypt(
+      {
+        accessKeyId: assumed.accessKeyId,
+        secretAccessKey: assumed.secretAccessKey,
+        sessionToken: assumed.sessionToken,
+      },
+      region,
+      {
+        ciphertextBlobBase64: wrappedKey,
+        keyId: kid,
+        encryptionAlgorithm: alg,
+      }
+    );
+
+    return json({
+      ok: true,
+      thread_id,
+      message_id,
+      wrapped_key_kid: kid,
+      wrapped_key_alg: alg,
+      dek_base64: decrypted.plaintextBase64,
+    });
+  } catch (error) {
+    console.error('DekUnseal failed', {
+      user_id,
+      thread_id,
+      message_id,
+      kid,
+      alg,
+      error: String((error as Error)?.message || error),
+    });
+    return internalError('decrypt failed');
+  }
+}

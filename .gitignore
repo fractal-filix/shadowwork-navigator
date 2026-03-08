@@ -32,3 +32,16 @@ __pycache__/
 .env
 .env.*
 .dev.vars
+
+# ignore generated KMS public key files
+public_key.der
+public_key_base64.txt
+public_key.pem
+
+# ignore local crypto test artifacts (do not commit)
+dek*.bin
+kms_pub.*
+local_pub.der
+public_from_kms.pem
+wrapped*.bin
+wrapped*.txt

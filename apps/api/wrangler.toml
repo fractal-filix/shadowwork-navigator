@@ -4,6 +4,14 @@ compatibility_date = "2026-01-02"
 
 [env.staging.vars]
 APP_ENV = "staging"
+ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
+JWT_ISSUER = "shadowwork-navigator-api"
+JWT_AUDIENCE = "shadowwork-navigator-web"
+ACCESS_TOKEN_TTL_SECONDS = "900"
+SUPABASE_URL="https://bekltsvemtvbjxwrqvxg.supabase.co"
+SUPABASE_JWKS_URL="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1/.well-known/jwks.json"
+SUPABASE_ISSUER="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1"
+SUPABASE_AUDIENCE="authenticated"
 
 [env.staging]
 name = "filix-shadowwork-api-staging"
@@ -11,15 +19,30 @@ name = "filix-shadowwork-api-staging"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "filix_shadowwork_stg"
-database_id = "554a6e64-4dd1-4bc5-b13e-a9de3d43631b"
-
+database_id = "441982e1-251f-4641-bc5a-026ccd593889"
 [env.production.vars]
 APP_ENV = "production"
+ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
+ALLOW_NON_LIVE_MEMBERSTACK_KEY = "true"
+JWT_ISSUER = "shadowwork-navigator-api"
+JWT_AUDIENCE = "shadowwork-navigator-web"
+ACCESS_TOKEN_TTL_SECONDS = "900"
+SUPABASE_URL="https://bekltsvemtvbjxwrqvxg.supabase.co"
+SUPABASE_JWKS_URL="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1/.well-known/jwks.json"
+SUPABASE_ISSUER="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1"
+SUPABASE_AUDIENCE="authenticated"
 
 [env.production]
 name = "filix-shadowwork-api"
+workers_dev = true
+preview_urls = true
+
+[[env.production.routes]]
+pattern = "api.shadowwork-navigator.com"
+zone_name = "shadowwork-navigator.com"
+custom_domain = true
 
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "filix_shadowwork_prod"
-database_id = "f9e0c1ff-4582-4338-9b63-979df3826a42"
+database_id = "41a2bbde-36bc-4a3e-8f80-a6a60be7d42a"

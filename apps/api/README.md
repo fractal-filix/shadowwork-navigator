@@ -44,6 +44,53 @@ STRIPE_CHECKOUT_MODE  = "payment"
 - 開発用ショートカット（例: `X-TEST-MEMBER-ID` によるテスト用なりすまし）は `APP_ENV=test` の場合のみ有効にするなど、環境で挙動を切り替える運用をしてください。
 - `POST /api/checkout/session` は `member_id`（JWTの`sub`）を `mem_` 形式として検証し、Stripe Checkout には `mode=payment` と `client_reference_id=<member_id>` を付与します。
 
+CORS/Cookie 運用の必須設定
+- `ALLOWED_ORIGINS` は許可する Origin のみを設定する（`*` 不可）。
+- CORS は許可 Origin をエコーし、`Access-Control-Allow-Credentials: true` を返す。
+- `/api/auth/exchange` の `Set-Cookie` は `HttpOnly; Secure; SameSite=Strict; Path=/` を維持する。
+
+棚卸し手順（Workers: staging / production）
+-------------------------------------------
+
+3/1時点の運用に合わせ、以下の手順で Secrets/Vars を棚卸しします。
+
+1. Secrets 一覧を確認
+
+```bash
+pnpm exec wrangler secret list --env staging
+pnpm exec wrangler secret list --env production
+```
+
+2. Vars は `wrangler.toml` の `[env.<name>.vars]` を確認
+
+必須 Vars（3/1時点）:
+- `APP_ENV`
+- `ALLOWED_ORIGINS`
+- `JWT_ISSUER`
+- `JWT_AUDIENCE`
+- `ACCESS_TOKEN_TTL_SECONDS`
+- `SUPABASE_URL`
+- `SUPABASE_JWKS_URL`
+- `SUPABASE_ISSUER`
+- `SUPABASE_AUDIENCE`
+
+必須 Secrets（3/1時点）:
+- `ADMIN_MEMBER_IDS`
+- `JWT_SIGNING_SECRET`
+- `MEMBERSTACK_SECRET_KEY`
+- `OPENAI_API_KEY`
+- `PAID_ADMIN_TOKEN`
+- `STRIPE_PRICE_ID`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+
+登録コマンド例:
+
+```bash
+pnpm exec wrangler secret put ADMIN_MEMBER_IDS --env staging
+pnpm exec wrangler secret put ADMIN_MEMBER_IDS --env production
+```
+
 ドキュメント追記希望があれば、`.env.example` の追加やデプロイ手順のテンプレートも作成します。
 
 D1再作成の自動化（PowerShell）

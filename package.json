@@ -8,5 +8,17 @@
     "lint": "pnpm -r lint",
     "dev:web": "pnpm --filter ./apps/web dev",
     "dev:api": "pnpm --filter ./apps/api dev"
+  },
+  "version": "1.0.0",
+  "description": "- `apps/web` : Cloudflare Pages\r - `apps/api` : Cloudflare Workers\r - `packages/*` : shared packages (reserved)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "jose": "^6.1.3"
   }
 }

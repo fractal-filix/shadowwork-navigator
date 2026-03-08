@@ -24,6 +24,7 @@ import { llmPingHandler } from "./handlers/llm_ping.js";
 import { llmRespondHandler } from "./handlers/llm_respond.js";
 
 import { stripeWebhookHandler } from "./handlers/stripe_webhook.js";
+import { dekUnsealHandler } from "./handlers/dek_unseal.js";
 
 const router = createRouter();
 
@@ -38,19 +39,23 @@ function isAllowedOrigin(origin: string, env: Env): boolean {
   return getAllowedOrigins(env).includes(origin);
 }
 
-function corsHeaders(origin: string): Record<string, string> {
-
+function corsHeaders(origin?: string): Record<string, string> {
   // CORS Allowlist（環境変数から取得）
   // 本番: https://shadowwork-navigator.com のみ
   // 開発: preview URLは原則許可しない（例外は1件だけ環境変数で指定）
-  return {
-    "Access-Control-Allow-Origin": origin,
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Credentials": "true", // Cookie送受信を許可
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
+
+  if (origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+
+  return headers;
 }
 
 function withCors(res: Response, cors: Record<string, string>): Response {
@@ -86,21 +91,27 @@ router.on("POST", "/api/llm/respond", llmRespondHandler);
 
 // stripe webhook
 router.on("POST", "/api/stripe/webhook", stripeWebhookHandler);
+router.on("POST", "/api/crypto/dek/unseal", dekUnsealHandler);
 
 const worker: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (env.APP_ENV === "production" && !env.MEMBERSTACK_SECRET_KEY.startsWith("sk_live_")) {
-      return errorResponse('INTERNAL_ERROR', 'misconfigured memberstack secret key', 500);
-    }
-
     const origin = request.headers.get("Origin");
     if (origin && !isAllowedOrigin(origin, env)) {
       return errorResponse('FORBIDDEN', 'origin not allowed', 403);
     }
 
-    const ch = origin ? corsHeaders(origin) : {};
+    const ch = corsHeaders(origin ?? undefined);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: ch });
+    }
+
+    const allowNonLiveMemberstackKey = env.ALLOW_NON_LIVE_MEMBERSTACK_KEY === "true";
+    if (
+      env.APP_ENV === "production" &&
+      !allowNonLiveMemberstackKey &&
+      !env.MEMBERSTACK_SECRET_KEY.startsWith("sk_live_")
+    ) {
+      return withCors(errorResponse('INTERNAL_ERROR', 'misconfigured memberstack secret key', 500), ch);
     }
 
     let res: Response;

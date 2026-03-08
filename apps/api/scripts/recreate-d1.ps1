@@ -7,6 +7,7 @@ param(
   [string]$DdlPath = "database/DDL.sql",
   [string]$WranglerTomlPath = "wrangler.toml",
   [string]$Environment = "",
+  [switch]$RemoteExecute,
   [switch]$DeleteExisting
 )
 
@@ -149,6 +150,12 @@ if ($Environment) {
   $envArgs += @("--env", $Environment)
 }
 
+$executeArgs = @("d1", "execute", $DatabaseName, "--file", $DdlPath) + $envArgs
+if ($RemoteExecute) {
+  # staging/production などの実環境に適用する場合は --remote を付与する。
+  $executeArgs += "--remote"
+}
+
 if ($DeleteExisting) {
   # 既存DBを削除してから作り直したい場合のみ実行（破壊的）
   try {
@@ -178,7 +185,7 @@ Update-WranglerTomlD1Binding `
   -TargetEnvironment $Environment
 
 # DDL適用
-Invoke-Wrangler -CommandArgs (@("d1", "execute", $DatabaseName, "--file", $DdlPath) + $envArgs)
+Invoke-Wrangler -CommandArgs $executeArgs
 
 Write-Host "完了: D1作成・DDL適用・wrangler.toml更新が完了しました。" -ForegroundColor Green
 Write-Host "更新されたbinding: $Binding" -ForegroundColor Green

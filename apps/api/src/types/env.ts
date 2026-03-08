@@ -24,9 +24,18 @@ export type Env = Readonly<{
   JWT_AUDIENCE: string;
   ACCESS_TOKEN_TTL_SECONDS: string;
 
+  // Supabase JWT検証
+  SUPABASE_URL: string;
+  SUPABASE_PUBLISHABLE_KEY: string;
+  SUPABASE_SERVICE_ROLE_KEY: string;
+  SUPABASE_JWKS_URL: string;
+  SUPABASE_ISSUER: string;
+  SUPABASE_AUDIENCE: string;
+
   // Memberstack検証
   MEMBERSTACK_SECRET_KEY: string;
   MEMBERSTACK_API_BASE_URL?: string;
+  ALLOW_NON_LIVE_MEMBERSTACK_KEY?: string;
   EXTERNAL_API_TIMEOUT_MS?: string;
 
   // CORS
@@ -34,5 +43,13 @@ export type Env = Readonly<{
 
   // 管理者リスト（カンマ区切りのmemberId）
   ADMIN_MEMBER_IDS: string;
+
+  // AWS
+  AWS_REGION?: string;
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  AWS_SESSION_TOKEN?: string;
+  ASSUME_ROLE_ARN?: string;
+  ASSUME_ROLE_SESSION_NAME?: string;
 }>;
 
