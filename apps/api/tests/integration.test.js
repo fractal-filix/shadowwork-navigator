@@ -505,19 +505,6 @@ test('POST /api/auth/exchange returns standardized internal error with details w
   }
 });
 
-test('worker returns standardized internal error for invalid production memberstack secret', async () => {
-  // Memberstack-specific production secret validation has been removed.
-  // This test is no longer applicable.
-});
-
-test('worker allows non-live memberstack key in production when override is enabled', async () => {
-  // Memberstack override behavior removed; test retained as placeholder.
-});
-
-test('OPTIONS preflight is allowed even when production memberstack secret is invalid', async () => {
-  // OPTIONS preflight behavior is validated by other CORS tests above.
-});
-
 test('CORS blocks request when Origin is not in allowlist', async () => {
   const res = await mf.dispatchFetch('http://localhost/', {
     method: 'GET',
@@ -618,21 +605,23 @@ test('GET /api/paid rejects test header without JWT cookie', async () => {
   assert.equal(typeof body.error?.message, 'string');
 });
 
-test('POST /api/checkout/session returns standardized bad request for invalid member_id format', async () => {
+test('POST /api/checkout/session accepts non-memberstack subject id from JWT', async () => {
+  const memberId = '3f9c5f71-4764-4ab2-9e6b-50f29ed8360e';
   const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
     method: 'POST',
     headers: {
-      ...buildAuthHeaders('member-123'),
+      ...buildAuthHeaders(memberId),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({}),
   });
 
-  assert.equal(res.status, 400);
+  assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.error?.code, 'BAD_REQUEST');
-  assert.equal(typeof body.error?.message, 'string');
+  assert.equal(body.ok, true);
+
+  const params = new URLSearchParams(lastCheckoutBody);
+  assert.equal(params.get('client_reference_id'), memberId);
 });
 
 test('POST /api/checkout/session creates payment checkout session with client_reference_id', async () => {

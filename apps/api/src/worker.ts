@@ -105,8 +105,6 @@ const worker: ExportedHandler<Env> = {
       return new Response(null, { status: 204, headers: ch });
     }
 
-    // Memberstack-specific production key validation removed: Supabase JWT is used now.
-
     let res: Response;
     try {
       res = await router.handle(request, env, ctx);
