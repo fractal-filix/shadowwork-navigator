@@ -2,7 +2,7 @@ import type { Env } from '../types/env.js';
 import type { AuthExchangeResponse } from '../types/api.js';
 import { json, badRequest, methodNotAllowed, internalError, unauthorized, errorResponse } from '../lib/http.js';
 import { createJWT, createSetCookieHeader } from '../lib/jwt.js';
-import { fetchExternalApi } from '../lib/external_api.js';
+import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from 'jose';
 
 interface AuthExchangeContext {
   request: Request;
@@ -13,77 +13,31 @@ interface AuthExchangeRequest {
   token?: unknown;
 }
 
-interface MemberstackVerifyResponse {
-  id: string;
-  email?: string;
-  [key: string]: unknown;
+const jwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+function getRemoteJwks(jwksUrl: string): ReturnType<typeof createRemoteJWKSet> {
+  const cached = jwksCache.get(jwksUrl);
+  if (cached) return cached;
+
+  const jwks = createRemoteJWKSet(new URL(jwksUrl));
+  jwksCache.set(jwksUrl, jwks);
+  return jwks;
 }
 
-function toRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object') return null;
-  return value as Record<string, unknown>;
-}
+function extractSubject(payload: Record<string, unknown>): string | null {
+  const sub = payload.sub;
+  if (typeof sub !== 'string') return null;
 
-function toMemberId(value: unknown): string | null {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed ? trimmed : null;
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return String(value);
-  }
-  return null;
-}
-
-function extractMemberIdFromVerifyResponse(value: unknown): string | null {
-  const obj = toRecord(value);
-  if (!obj) return null;
-
-  const direct =
-    toMemberId(obj.id) ||
-    toMemberId(obj.member_id) ||
-    toMemberId(obj.memberId);
-  if (direct) return direct;
-
-  const member = toRecord(obj.member);
-  if (member) {
-    const memberId =
-      toMemberId(member.id) ||
-      toMemberId(member.member_id) ||
-      toMemberId(member.memberId);
-    if (memberId) return memberId;
-  }
-
-  const data = toRecord(obj.data);
-  if (data) {
-    const dataId =
-      toMemberId(data.id) ||
-      toMemberId(data.member_id) ||
-      toMemberId(data.memberId);
-    if (dataId) return dataId;
-
-    const dataMember = toRecord(data.member);
-    if (dataMember) {
-      const nestedMemberId =
-        toMemberId(dataMember.id) ||
-        toMemberId(dataMember.member_id) ||
-        toMemberId(dataMember.memberId);
-      if (nestedMemberId) return nestedMemberId;
-    }
-  }
-
-  return null;
+  const trimmed = sub.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /**
- * Memberstack トークンを検証し、JWT を発行して Cookie で返す
- * 
- * Memberstack Admin REST API (https://admin.memberstack.com/members/verify-token) を使用して
- * フロントエンドから渡された Memberstack JWT を検証し、バックエンド用の JWT を発行します。
+ * Supabase Access Token を検証し、内部用JWTを発行して Cookie で返す
  * 
  * POST /api/auth/exchange
- * Request: { "token": "memberstack-jwt-token" }
- * Response: { "ok": true, "member_id": "mem_xxx", "token_type": "Bearer", "expires_in": 900 }
+ * Request: { "token": "supabase-access-token" }
+ * Response: { "ok": true, "member_id": "<supabase-sub>", "token_type": "Bearer", "expires_in": 900 }
  * Set-Cookie: access_token=<JWT>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900
  */
 export async function authExchangeHandler({ request, env }: AuthExchangeContext): Promise<Response> {
@@ -97,7 +51,9 @@ export async function authExchangeHandler({ request, env }: AuthExchangeContext)
   if (!env.JWT_ISSUER) missing.push('JWT_ISSUER');
   if (!env.JWT_AUDIENCE) missing.push('JWT_AUDIENCE');
   if (!env.ACCESS_TOKEN_TTL_SECONDS) missing.push('ACCESS_TOKEN_TTL_SECONDS');
-  if (!env.MEMBERSTACK_SECRET_KEY) missing.push('MEMBERSTACK_SECRET_KEY');
+  if (!env.SUPABASE_JWKS_URL) missing.push('SUPABASE_JWKS_URL');
+  if (!env.SUPABASE_ISSUER) missing.push('SUPABASE_ISSUER');
+  if (!env.SUPABASE_AUDIENCE) missing.push('SUPABASE_AUDIENCE');
 
   if (missing.length) {
     return internalError('missing env vars', { missing });
@@ -116,35 +72,34 @@ export async function authExchangeHandler({ request, env }: AuthExchangeContext)
     return badRequest('token required');
   }
 
-  // Memberstack Admin API でトークンを検証
+  // Supabase JWT (access token) を検証
   let memberId: string;
   try {
-    const memberstackBase = (env.MEMBERSTACK_API_BASE_URL || 'https://admin.memberstack.com').trim();
-    const verifyResponse = await fetchExternalApi(`${memberstackBase}/members/verify-token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-KEY': env.MEMBERSTACK_SECRET_KEY,
-      },
-      body: JSON.stringify({ token }),
-    }, env);
+    const jwks = getRemoteJwks(env.SUPABASE_JWKS_URL.trim());
+    const { payload } = await jwtVerify(token, jwks, {
+      issuer: env.SUPABASE_ISSUER,
+      audience: env.SUPABASE_AUDIENCE,
+    });
+    const extractedMemberId = extractSubject(payload as Record<string, unknown>);
 
-    if (!verifyResponse.ok) {
-      return unauthorized('memberstack verification failed');
-    }
-
-    const verifyData = await verifyResponse.json() as MemberstackVerifyResponse;
-    const extractedMemberId = extractMemberIdFromVerifyResponse(verifyData);
-
-    // 検証成功確認（レスポンス内に member id が含まれている）
+    // sub クレームを user id として扱う
     if (!extractedMemberId) {
-      return unauthorized('invalid memberstack response');
+      return unauthorized('invalid supabase token payload');
     }
 
     memberId = extractedMemberId;
   } catch (err) {
-    console.error('memberstack verify error:', err);
-    return errorResponse('INTERNAL_ERROR', 'memberstack api error', 502, {
+    if (
+      err instanceof joseErrors.JWTInvalid ||
+      err instanceof joseErrors.JWTClaimValidationFailed ||
+      err instanceof joseErrors.JWSSignatureVerificationFailed ||
+      err instanceof joseErrors.JWSInvalid
+    ) {
+      return unauthorized('supabase token verification failed');
+    }
+
+    console.error('supabase jwt verify error:', err);
+    return errorResponse('INTERNAL_ERROR', 'supabase jwt verify error', 502, {
       message: String((err as Error)?.message || err),
     });
   }
