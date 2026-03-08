@@ -2,7 +2,6 @@
 
 - 既定の API Base URL は `https://api.shadowwork-navigator.com` です（`pages/lib/client.js`）。
 - Supabase クライアント設定は `SHADOWNAV_SUPABASE_URL` / `SHADOWNAV_SUPABASE_PUBLISHABLE_KEY` から読み取れます（`pages/lib/client.js`）。
-- `SHADOWNAV_SUPABASE_ANON_KEY` は旧設定との後方互換用フォールバックです。
 - すべての API 呼び出しは `credentials: "include"` を付与して Cookie を送受信します。
 - 一時的に API Base URL を上書きしたい場合は、ブラウザ Console で以下を実行してリロードします。
 
@@ -25,6 +24,5 @@ location.reload();
 localStorage.removeItem("SHADOWNAV_API_BASE");
 localStorage.removeItem("SHADOWNAV_SUPABASE_URL");
 localStorage.removeItem("SHADOWNAV_SUPABASE_PUBLISHABLE_KEY");
-localStorage.removeItem("SHADOWNAV_SUPABASE_ANON_KEY");
 location.reload();
 ```

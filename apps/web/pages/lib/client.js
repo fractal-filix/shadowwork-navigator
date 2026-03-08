@@ -9,8 +9,6 @@ export const SUPABASE_PUBLISHABLE_KEY =
   (
     globalThis.SHADOWNAV_SUPABASE_PUBLISHABLE_KEY ||
     localStorage.getItem("SHADOWNAV_SUPABASE_PUBLISHABLE_KEY") ||
-    globalThis.SHADOWNAV_SUPABASE_ANON_KEY ||
-    localStorage.getItem("SHADOWNAV_SUPABASE_ANON_KEY") ||
     ""
   ).trim();
 export const DEBUG_UI = false; // true にすると dbg が console に出す
