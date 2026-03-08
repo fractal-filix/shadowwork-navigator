@@ -118,7 +118,7 @@
 - [x] 2.2.2 Docs: 設計書内の Memberstack 記述を Supabase に置換（2pt）
 - [x] 2.3 API: Memberstack前提のチェックを削除（例: production時のキー形式ガード）（2pt）
 - [x] 2.4 Web: user_id クエリ送信を廃止（JWT由来に統一）（3pt）
-- [ ] 3.1 API: /api/thread/context_card と /api/run/step2_meta_card を削除（ルーティング含む）（3pt）
+- [x] 3.1 API: /api/thread/context_card と /api/run/step2_meta_card を削除（ルーティング含む）（3pt）
 
 ## 2026.03.08
 - [ ] 3.2 API: thread/chat からカード必須入力・カード注入を削除（3pt）
