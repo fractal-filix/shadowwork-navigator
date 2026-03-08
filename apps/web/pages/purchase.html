@@ -131,8 +131,8 @@
       localStorage.setItem("user_id", v);
     }
 
-    async function apiPaid(userId) {
-      const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
+    async function apiPaid() {
+      const url = `${API_BASE}/api/paid`;
       dbg("[api] paid ->", url);
       const res = await fetch(url, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
@@ -204,7 +204,7 @@
       $toDashboardBtn.disabled = false;
 
       setStatus("status: checking paid...", "muted");
-      const r = await apiPaid(memberId);
+      const r = await apiPaid();
       if (!r.ok) {
         setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
         return;
@@ -248,7 +248,7 @@
           showLoggedOutUI();
           return;
         }
-        const r = await apiPaid(userId);
+        const r = await apiPaid();
         if (!r.ok) {
           setStatus(`status: paid check failed: ${JSON.stringify(r.data)}`, "ng");
           return;

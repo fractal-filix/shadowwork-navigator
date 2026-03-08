@@ -38,32 +38,8 @@ function normalizeSupabaseUrl(rawValue) {
   return url.origin;
 }
 
-export function getUserId() {
-  const qs = new URLSearchParams(location.search);
-  const q = qs.get("user_id");
-  if (q && q.trim()) {
-    const v = q.trim();
-    localStorage.setItem("user_id", v);
-    return v;
-  }
-  const stored = localStorage.getItem("user_id");
-  return stored && stored.trim() ? stored.trim() : "test";
-}
-
-export function setUserId(v) {
-  const val = (v || "").trim();
-  if (!val) return;
-  localStorage.setItem("user_id", val);
-}
-
-export function qsUserIdUrl(path, userId) {
-  const u = new URL(path, location.origin);
-  u.searchParams.set("user_id", userId);
-  return u.toString();
-}
-
-export async function apiPaid(userId) {
-  const url = `${API_BASE}/api/paid?user_id=${encodeURIComponent(userId)}`;
+export async function apiPaid() {
+  const url = `${API_BASE}/api/paid`;
   dbg("[api] paid ->", url);
 
   const res = await fetch(url, { credentials: "include" });

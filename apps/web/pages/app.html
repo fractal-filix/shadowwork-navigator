@@ -21,7 +21,7 @@
   <pre id="log"></pre>
 
   <script type="module">
-    import { API_BASE, apiPaid, qsUserIdUrl, getSupabaseUser } from "/lib/client.js";
+    import { API_BASE, apiPaid, getSupabaseUser } from "/lib/client.js";
     const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
     const $log = document.getElementById("log");
@@ -75,10 +75,7 @@
     }
 
     async function fetchState() {
-      const res = await fetch(
-        `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-        { method: "GET", credentials: "include" }
-      );
+      const res = await fetch(`${API_BASE}/api/thread/state`, { method: "GET", credentials: "include" });
       const json = await res.json();
       console.log("[thread/state]", json);
 
@@ -95,7 +92,7 @@
 
     async function apiThreadMessages(threadId) {
       const res = await fetch(
-        `${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(USER_ID)}&thread_id=${encodeURIComponent(threadId)}`,
+        `${API_BASE}/api/thread/messages?thread_id=${encodeURIComponent(threadId)}`,
         { method: "GET", credentials: "include" }
       );
       const data = await res.json().catch(() => ({}));
@@ -155,10 +152,7 @@
       }
 
       // なければ作る
-      const res = await fetch(
-        `${API_BASE}/api/thread/start?user_id=${encodeURIComponent(USER_ID)}`,
-        { method: "POST", credentials: "include" }
-      );
+      const res = await fetch(`${API_BASE}/api/thread/start`, { method: "POST", credentials: "include" });
       const json = await res.json();
       console.log("[thread/start]", json);
 
@@ -242,16 +236,13 @@
           if (!USER_ID) return;
 
           // paid gate: 未決済なら purchase に飛ばす
-          const isPaid = await apiPaid(USER_ID);
+          const isPaid = await apiPaid();
           if (!isPaid) {
             location.href = "/purchase.html";
             return;
           }
 
-          const res = await fetch(
-            `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(USER_ID)}`,
-            { method: "GET", credentials: "include" }
-          );
+          const res = await fetch(`${API_BASE}/api/thread/state`, { method: "GET", credentials: "include" });
           const st = await res.json();
           console.log("[thread/state:init]", st);
 

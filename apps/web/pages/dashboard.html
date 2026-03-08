@@ -238,7 +238,6 @@
       API_BASE,
       dbg,
       dbgErr,
-      qsUserIdUrl,
       apiPaid,
       getSupabaseUser
     } from "/lib/client.js";
@@ -277,8 +276,8 @@
       return { member: null, error: lastErr };
     }
 
-    async function apiGetState(userId) {
-      const url = `${API_BASE}/api/thread/state?user_id=${encodeURIComponent(userId)}`;
+    async function apiGetState() {
+      const url = `${API_BASE}/api/thread/state`;
       dbg("[api] thread/state ->", url);
       const res = await fetch(url, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
@@ -286,9 +285,9 @@
       return data;
     }
 
-    async function apiRunStart(userId) {
-      dbg("[api] run/start ->", userId);
-      const res = await fetch(`${API_BASE}/api/run/start?user_id=${encodeURIComponent(userId)}`, {
+    async function apiRunStart() {
+      dbg("[api] run/start ->");
+      const res = await fetch(`${API_BASE}/api/run/start`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -300,9 +299,9 @@
       return data;
     }
 
-    async function apiRunRestart(userId) {
-      dbg("[api] run/restart ->", userId);
-      const res = await fetch(`${API_BASE}/api/run/restart?user_id=${encodeURIComponent(userId)}`, {
+    async function apiRunRestart() {
+      dbg("[api] run/restart ->");
+      const res = await fetch(`${API_BASE}/api/run/restart`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -314,9 +313,9 @@
       return data;
     }
 
-    async function apiThreadStart(userId) {
-      dbg("[api] thread/start ->", userId);
-      const res = await fetch(`${API_BASE}/api/thread/start?user_id=${encodeURIComponent(userId)}`, {
+    async function apiThreadStart() {
+      dbg("[api] thread/start ->");
+      const res = await fetch(`${API_BASE}/api/thread/start`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -329,27 +328,27 @@
     }
 
     // --- history APIs ---
-    async function apiRunsList(userId) {
-      dbg("[history] runs/list ->", userId);
-      const res = await fetch(`${API_BASE}/api/runs/list?user_id=${encodeURIComponent(userId)}`, { credentials: "include" });
+    async function apiRunsList() {
+      dbg("[history] runs/list ->");
+      const res = await fetch(`${API_BASE}/api/runs/list`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] runs/list <-", data);
       if (!res.ok) throw new Error(data?.error || "runs/list failed");
       return data; // { ok, runs: [...] }
     }
 
-    async function apiThreadsList(userId, runNo) {
-      dbg("[history] threads/list ->", { userId, runNo });
-      const res = await fetch(`${API_BASE}/api/threads/list?user_id=${encodeURIComponent(userId)}&run_no=${encodeURIComponent(runNo)}`, { credentials: "include" });
+    async function apiThreadsList(runNo) {
+      dbg("[history] threads/list ->", { runNo });
+      const res = await fetch(`${API_BASE}/api/threads/list?run_no=${encodeURIComponent(runNo)}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] threads/list <-", data);
       if (!res.ok) throw new Error(data?.error || "threads/list failed");
       return data; // { ok, run, threads: [...] }
     }
 
-    async function apiThreadMessages(userId, threadId) {
-      dbg("[history] thread/messages ->", { userId, threadId });
-      const res = await fetch(`${API_BASE}/api/thread/messages?user_id=${encodeURIComponent(userId)}&thread_id=${encodeURIComponent(threadId)}`, { credentials: "include" });
+    async function apiThreadMessages(threadId) {
+      dbg("[history] thread/messages ->", { threadId });
+      const res = await fetch(`${API_BASE}/api/thread/messages?thread_id=${encodeURIComponent(threadId)}`, { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       dbg("[history] thread/messages <-", data);
       if (!res.ok) throw new Error(data?.error || "thread/messages failed");
@@ -461,7 +460,7 @@
 
       try {
         // 3) paid required
-        const isPaid = await apiPaid(userId);
+        const isPaid = await apiPaid();
         if (!isPaid) {
           location.href = "/purchase.html";
           return;
@@ -511,7 +510,7 @@
       async function loadRunsAndSelect(defaultRunNo) {
         historyStatus.textContent = "runs 読み込み中...";
         dbg("[history] loadRunsAndSelect", { userId, defaultRunNo });
-        const data = await apiRunsList(userId);
+        const data = await apiRunsList();
         __runs = (data?.runs ?? [])
           .slice()
           .sort((a, b) => Number(b.run_no) - Number(a.run_no));
@@ -557,8 +556,8 @@
         }
 
         historyStatus.textContent = `threads 読み込み中 (run #${__selectedRunNo})...`;
-        dbg("[history] loadThreadsForSelectedRun", { userId, runNo: __selectedRunNo });
-        const data = await apiThreadsList(userId, __selectedRunNo);
+        dbg("[history] loadThreadsForSelectedRun", { runNo: __selectedRunNo });
+        const data = await apiThreadsList(__selectedRunNo);
         const threads = data?.threads ?? [];
         dbg("[history] threads count", threads.length);
 
@@ -595,7 +594,7 @@
               __selectedThreadId = t.id;
               dbg("[history] click thread", t.id);
 
-              const msgData = await apiThreadMessages(userId, t.id);
+              const msgData = await apiThreadMessages(t.id);
               const threadLabel = formatThreadLabel(msgData?.thread || t);
               messagesHeader.textContent = `${threadLabel} / thread_id=${t.id}`;
               renderMessages(msgData?.messages ?? []);
@@ -620,7 +619,7 @@
         statusLine.textContent = "loading...";
         hint.textContent = "";
 
-        const state = await apiGetState(userId);
+        const state = await apiGetState();
 
         const run = state?.run;
         const thread = state?.thread;
@@ -641,23 +640,23 @@
         primaryBtn.onclick = async () => {
           primaryBtn.disabled = true;
           hint.textContent = "処理中...";
-          dbg("[ui] primary click", { mode: p.mode, userId });
+          dbg("[ui] primary click", { mode: p.mode });
 
           try {
             if (p.mode === "START") {
-              await apiRunStart(userId);
-              await apiThreadStart(userId);
+              await apiRunStart();
+              await apiThreadStart();
               openApp();
               return;
             }
             if (p.mode === "RESTART") {
-              await apiRunRestart(userId);
-              await apiThreadStart(userId);
+              await apiRunRestart();
+              await apiThreadStart();
               openApp();
               return;
             }
             if (p.mode === "NEXT") {
-              await apiThreadStart(userId);
+              await apiThreadStart();
               openApp();
               return;
             }
@@ -684,7 +683,7 @@
       }
 
       async function refreshAll() {
-        dbg("[ui] refreshAll", { userId });
+        dbg("[ui] refreshAll");
         // Primary (state) -> History default run selection
         const state = await refreshPrimaryArea().catch((e) => {
           console.error(e);
