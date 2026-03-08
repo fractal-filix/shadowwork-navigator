@@ -102,10 +102,14 @@
 
 - [x] 1.6.3 DDLの適用手順を確立（3pt）
 	- 手順書: `docs/sprints/sprint1/runbook_20260306.md`
+	- 実施（2026-03-08）: pre-release 前提で staging/production を破壊的再作成し、`database/DDL.sql` を `--remote` で適用
 - [x] 1.6.3.1 開発環境: apps/api/scripts/recreate-d1.ps1 でD1再作成＋DDL適用（破壊的なので開発のみ）（2pt）
 	- 実行コマンドと確認コマンドを runbook に固定化
 - [x] 1.6.3.2 staging/production: 既存DBへ安全にDDL差分を適用（破壊的操作はしない）（4pt）
 	- `wrangler d1 execute --file` での非破壊差分適用フロー（staging→production）を runbook に固定化
+	- 実施（2026-03-08）: `pnpm exec wrangler d1 execute filix_shadowwork_stg --env staging --remote --file database/DDL.sql`
+	- 実施（2026-03-08）: `pnpm exec wrangler d1 execute filix_shadowwork_prod --env production --remote --file database/DDL.sql`
+	- 検証（remote）: `SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;` で `runs`, `threads`, `messages`, `cards`, `user_flags`, `stripe_webhook_events` を確認
 
 ## 2026.03.07
 - [ ] 2.1 API: /api/auth/exchange を Supabase JWT 検証に置換（4pt）
