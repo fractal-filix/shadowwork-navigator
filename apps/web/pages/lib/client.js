@@ -5,8 +5,14 @@ export const API_BASE =
   (globalThis.SHADOWNAV_API_BASE || localStorage.getItem("SHADOWNAV_API_BASE") || DEFAULT_API_BASE).trim();
 export const SUPABASE_URL =
   (globalThis.SHADOWNAV_SUPABASE_URL || localStorage.getItem("SHADOWNAV_SUPABASE_URL") || "").trim();
-export const SUPABASE_ANON_KEY =
-  (globalThis.SHADOWNAV_SUPABASE_ANON_KEY || localStorage.getItem("SHADOWNAV_SUPABASE_ANON_KEY") || "").trim();
+export const SUPABASE_PUBLISHABLE_KEY =
+  (
+    globalThis.SHADOWNAV_SUPABASE_PUBLISHABLE_KEY ||
+    localStorage.getItem("SHADOWNAV_SUPABASE_PUBLISHABLE_KEY") ||
+    globalThis.SHADOWNAV_SUPABASE_ANON_KEY ||
+    localStorage.getItem("SHADOWNAV_SUPABASE_ANON_KEY") ||
+    ""
+  ).trim();
 export const DEBUG_UI = false; // true にすると dbg が console に出す
 
 export function dbg(...args) {
@@ -57,10 +63,10 @@ export async function apiPaid(userId) {
 
 export function createSupabaseClient() {
   try {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+    if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return null;
     if ((window).__SUPABASE_CLIENT__) return (window).__SUPABASE_CLIENT__;
     if (window.supabase && typeof window.supabase.createClient === "function") {
-      (window).__SUPABASE_CLIENT__ = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      (window).__SUPABASE_CLIENT__ = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
       return (window).__SUPABASE_CLIENT__;
     }
     return null;
