@@ -1356,6 +1356,9 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
       alg: 'AES-256-GCM',
       v: 1,
       kid: 'k1',
+      wrapped_key: 'wrapped-key-base64',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-1',
     }),
   });
 
@@ -1364,7 +1367,7 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
   assert.equal(saveBody.ok, true);
 
   const raw = await db
-    .prepare('SELECT content, content_iv, content_alg, content_v, content_kid FROM messages WHERE thread_id = ? LIMIT 1')
+    .prepare('SELECT content, content_iv, content_alg, content_v, content_kid, content_wrapped_key, content_wrapped_key_alg, content_wrapped_key_kid FROM messages WHERE thread_id = ? LIMIT 1')
     .bind(threadId)
     .first();
 
@@ -1373,6 +1376,9 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
   assert.equal(raw?.content_alg, 'AES-256-GCM');
   assert.equal(raw?.content_v, 1);
   assert.equal(raw?.content_kid, 'k1');
+  assert.equal(raw?.content_wrapped_key, 'wrapped-key-base64');
+  assert.equal(raw?.content_wrapped_key_alg, 'RSAES_OAEP_SHA_256');
+  assert.equal(raw?.content_wrapped_key_kid, 'kms-key-1');
 
   const listRes = await mf.dispatchFetch(`http://localhost/api/thread/messages?thread_id=${threadId}`, {
     method: 'GET',
@@ -1388,7 +1394,62 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
   assert.equal(listBody.messages[0].alg, 'AES-256-GCM');
   assert.equal(listBody.messages[0].v, 1);
   assert.equal(listBody.messages[0].kid, 'k1');
+  assert.equal(listBody.messages[0].wrapped_key, 'wrapped-key-base64');
+  assert.equal(listBody.messages[0].wrapped_key_alg, 'RSAES_OAEP_SHA_256');
+  assert.equal(listBody.messages[0].wrapped_key_kid, 'kms-key-1');
   assert.equal(listBody.messages[0].content, undefined);
+});
+
+test('POST /api/thread/message accepts payload without wrapped key fields', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const threadStartBody = await threadStartRes.json();
+  const threadId = threadStartBody.thread?.id;
+  assert.equal(typeof threadId, 'string');
+
+  const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      role: 'assistant',
+      client_message_id: 'cm-without-wrapped-key',
+      ciphertext: 'cipher-no-wrap',
+      iv: 'iv-no-wrap',
+      alg: 'AES-256-GCM',
+      v: 1,
+    }),
+  });
+
+  assert.equal(saveRes.status, 200);
+
+  const listRes = await mf.dispatchFetch(`http://localhost/api/thread/messages?thread_id=${threadId}`, {
+    method: 'GET',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+
+  assert.equal(listRes.status, 200);
+  const listBody = await listRes.json();
+  assert.equal(listBody.messages[0].wrapped_key ?? null, null);
+  assert.equal(listBody.messages[0].wrapped_key_alg ?? null, null);
+  assert.equal(listBody.messages[0].wrapped_key_kid ?? null, null);
 });
 
 test('POST /api/thread/message is idempotent with client_message_id', async () => {

@@ -148,6 +148,10 @@ export interface EncryptedMessageDetail {
     alg: string;
     v: number;
     kid?: string | null;
+    wrapped_key?: string | null;
+    wrapped_key_alg?: string | null;
+    wrapped_key_kid?: string | null;
+    key_v?: number | null;
     seq?: number;
     created_at?: string;
 }

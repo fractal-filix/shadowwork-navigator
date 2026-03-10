@@ -124,7 +124,7 @@
 - [x] 3.2 API: thread/chat からカード必須入力・カード注入を削除（3pt）
 - [x] 3.3 DB: cards テーブル/インデックスを DDL から削除（3pt）
 - [x] 3.4 types/tests/docs: カード関連を削除し、仕様を更新（4pt）
-- [ ] 4.1 API: thread/message / thread/messages を封筒暗号メタ対応に拡張（入出力契約の確定）（5pt）
+- [x] 4.1 API: thread/message / thread/messages を封筒暗号メタ対応に拡張（入出力契約の確定）（5pt）
 
 ## 2026.03.09
 - [ ] 4.2 API: wrapped_key* を **必須** として扱う（カード無し）（3pt）
