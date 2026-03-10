@@ -1631,6 +1631,33 @@ test('POST/GET /api/run/step2_meta_card returns 404 after endpoint removal', asy
   assert.equal(getRes.status, 404);
 });
 
+test('API type definitions exclude legacy card contracts', async () => {
+  const apiTypesPath = path.resolve(process.cwd(), 'src/types/api.ts');
+  const databaseTypesPath = path.resolve(process.cwd(), 'src/types/database.ts');
+  const [apiTypesSource, databaseTypesSource] = await Promise.all([
+    fs.readFile(apiTypesPath, 'utf8'),
+    fs.readFile(databaseTypesPath, 'utf8'),
+  ]);
+
+  assert.equal(apiTypesSource.includes('EncryptedCardPayload'), false);
+  assert.equal(apiTypesSource.includes('ThreadContextCardResponse'), false);
+  assert.equal(apiTypesSource.includes('RunStep2MetaCardResponse'), false);
+  assert.equal(databaseTypesSource.includes('CardKind'), false);
+  assert.equal(databaseTypesSource.includes('CardRow'), false);
+});
+
+test('API specification excludes legacy card endpoints and request fields', async () => {
+  const apiSpecPath = path.resolve(process.cwd(), 'documents/基本設計書/20_API仕様.md');
+  const apiSpecSource = await fs.readFile(apiSpecPath, 'utf8');
+
+  assert.equal(apiSpecSource.includes('/api/thread/context_card'), false);
+  assert.equal(apiSpecSource.includes('/api/run/step2_meta_card'), false);
+  assert.equal(apiSpecSource.includes('`context_card` は必須'), false);
+  assert.equal(apiSpecSource.includes('`step2_meta_card` は Step2 の thread では必須'), false);
+  assert.equal(apiSpecSource.includes('"context_card":'), false);
+  assert.equal(apiSpecSource.includes('"step2_meta_card":'), false);
+});
+
 test('GET /api/thread/state returns encrypted last_message when message exists', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')

@@ -123,27 +123,6 @@ export interface CreateMessageInput {
 }
 
 // ============================================================================
-// Cards テーブル
-// ============================================================================
-
-export type CardKind = 'context_card' | 'step2_meta_card';
-
-export interface CardRow {
-  id: string;
-  run_id: string;
-  thread_id: string | null;
-  user_id: string;
-  kind: CardKind;
-  content: string;
-  content_iv: string;
-  content_alg: string;
-  content_v: number;
-  content_kid: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-// ============================================================================
 // User Flags テーブル
 // ============================================================================
 

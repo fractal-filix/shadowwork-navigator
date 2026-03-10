@@ -218,25 +218,6 @@ export interface ThreadMessagesResponse extends SuccessResponse {
     };
 }
 
-export interface EncryptedCardPayload {
-    ciphertext: string;
-    iv: string;
-    alg: string;
-    v: number;
-    kid?: string | null;
-}
-
-export interface ThreadContextCardResponse extends SuccessResponse {
-    run: RunSummary;
-    thread: ThreadDetail;
-    card: EncryptedCardPayload;
-}
-
-export interface RunStep2MetaCardResponse extends SuccessResponse {
-    run: RunSummary;
-    card: EncryptedCardPayload;
-}
-
 // ============================================================================
 // Run 関連のレスポンス
 // ============================================================================
@@ -333,8 +314,6 @@ export type ApiResponse =
     | ThreadStateResponse
     | ThreadCloseResponse
     | ThreadMessagesResponse
-    | ThreadContextCardResponse
-    | RunStep2MetaCardResponse
     | RunStartResponse
     | RunRestartResponse
     | RunsListResponse
