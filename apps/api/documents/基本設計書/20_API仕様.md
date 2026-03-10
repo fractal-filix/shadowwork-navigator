@@ -256,6 +256,8 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 - `wrapped_key_alg`: ラップ方式（例: `KMS` / `RSA-OAEP` 等）
 - `wrapped_key_kid`: KEK識別子（例: KMS Key ID/ARN）
 
+上記 `wrapped_key*` 3項目はすべて必須。いずれかが欠けている、または空文字のときは `400 Bad Request` を返す。
+
 **成功レスポンス（例）**:
 ```json
 {
@@ -357,6 +359,7 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 
 補足:
 - 返却は暗号文とメタ情報のみ（平文本文は返却しない）。
+- `wrapped_key`, `wrapped_key_alg`, `wrapped_key_kid` は各メッセージで必ず返る前提とする。
 
 ---
 

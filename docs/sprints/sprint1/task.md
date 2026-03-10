@@ -127,7 +127,7 @@
 - [x] 4.1 API: thread/message / thread/messages を封筒暗号メタ対応に拡張（入出力契約の確定）（5pt）
 
 ## 2026.03.09
-- [ ] 4.2 API: wrapped_key* を **必須** として扱う（カード無し）（3pt）
+- [x] 4.2 API: wrapped_key* を **必須** として扱う（カード無し）（3pt）
 - [ ] 4.3 API: KMS公開鍵の配布（例: GET /api/crypto/kms_public_key）（4pt）
 - [ ] 4.3.1 返却: kid と公開鍵（PEM/JWK等、WebでRSA-OAEPラップできる形式）（3pt）
 - [ ] 4.4 API: wrapped_key のアンラップ（例: POST /api/crypto/dek/unseal）（6pt）

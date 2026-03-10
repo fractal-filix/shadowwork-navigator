@@ -1400,7 +1400,7 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
   assert.equal(listBody.messages[0].content, undefined);
 });
 
-test('POST /api/thread/message accepts payload without wrapped key fields', async () => {
+test('POST /api/thread/message rejects payload without wrapped key fields', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
     .bind(MEMBER_ID)
@@ -1421,35 +1421,48 @@ test('POST /api/thread/message accepts payload without wrapped key fields', asyn
   const threadId = threadStartBody.thread?.id;
   assert.equal(typeof threadId, 'string');
 
-  const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders(MEMBER_ID),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      thread_id: threadId,
-      role: 'assistant',
-      client_message_id: 'cm-without-wrapped-key',
-      ciphertext: 'cipher-no-wrap',
-      iv: 'iv-no-wrap',
-      alg: 'AES-256-GCM',
-      v: 1,
-    }),
-  });
+  const basePayload = {
+    thread_id: threadId,
+    role: 'assistant',
+    client_message_id: 'cm-without-wrapped-key',
+    ciphertext: 'cipher-no-wrap',
+    iv: 'iv-no-wrap',
+    alg: 'AES-256-GCM',
+    v: 1,
+    wrapped_key: 'wrapped-key-base64',
+    wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+    wrapped_key_kid: 'kms-key-1',
+  };
 
-  assert.equal(saveRes.status, 200);
+  for (const [missingField, expectedMessage] of [
+    ['wrapped_key', 'wrapped_key is required'],
+    ['wrapped_key_alg', 'wrapped_key_alg is required'],
+    ['wrapped_key_kid', 'wrapped_key_kid is required'],
+  ]) {
+    const payload = { ...basePayload };
+    delete payload[missingField];
 
-  const listRes = await mf.dispatchFetch(`http://localhost/api/thread/messages?thread_id=${threadId}`, {
-    method: 'GET',
-    headers: buildAuthHeaders(MEMBER_ID),
-  });
+    const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(MEMBER_ID),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-  assert.equal(listRes.status, 200);
-  const listBody = await listRes.json();
-  assert.equal(listBody.messages[0].wrapped_key ?? null, null);
-  assert.equal(listBody.messages[0].wrapped_key_alg ?? null, null);
-  assert.equal(listBody.messages[0].wrapped_key_kid ?? null, null);
+    assert.equal(saveRes.status, 400);
+    const saveBody = await saveRes.json();
+    assert.equal(saveBody.error?.code, 'BAD_REQUEST');
+    assert.equal(saveBody.error?.message, expectedMessage);
+  }
+
+  const raw = await db
+    .prepare('SELECT COUNT(*) AS count FROM messages WHERE thread_id = ?')
+    .bind(threadId)
+    .first();
+
+  assert.equal(raw?.count, 0);
 });
 
 test('POST /api/thread/message is idempotent with client_message_id', async () => {
@@ -1481,6 +1494,9 @@ test('POST /api/thread/message is idempotent with client_message_id', async () =
     iv: 'iv-1',
     alg: 'AES-256-GCM',
     v: 1,
+    wrapped_key: 'wrapped-key-1',
+    wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+    wrapped_key_kid: 'kms-key-1',
   };
 
   const first = await mf.dispatchFetch('http://localhost/api/thread/message', {
@@ -1545,6 +1561,9 @@ test('POST /api/thread/message does not reject large ciphertext for cost control
       iv: 'i'.repeat(513),
       alg: 'a'.repeat(65),
       v: 1,
+      wrapped_key: 'wrapped-key-large',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-large',
     }),
   });
 
@@ -1589,6 +1608,9 @@ test('POST /api/thread/message returns 400 when id fields exceed max length', as
       alg: 'AES-256-GCM',
       v: 1,
       kid: 'kid-ok',
+      wrapped_key: 'wrapped-key-ok',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-ok',
     };
     payload[testCase.field] = testCase.value;
 
@@ -1755,6 +1777,9 @@ test('GET /api/thread/state returns encrypted last_message when message exists',
       alg: 'AES-256-GCM',
       v: 1,
       kid: 'k-state-1',
+      wrapped_key: 'wrapped-key-state-1',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-state-1',
     }),
   });
   assert.equal(saveRes.status, 200);
@@ -2085,6 +2110,9 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
       iv: 'main-flow-iv',
       alg: 'AES-256-GCM',
       v: 1,
+      wrapped_key: 'main-flow-wrapped-key',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'main-flow-kms-key',
     }),
   });
 

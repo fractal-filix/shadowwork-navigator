@@ -189,19 +189,19 @@ export async function threadMessageHandler({ request, env, url }: ThreadMessageH
     return badRequest(`kid must be <= ${MAX_KID_LENGTH} chars`);
   }
 
-  if (typeof wrappedKey !== 'undefined' && wrappedKey !== null && typeof wrappedKey !== 'string') {
-    return badRequest('wrapped_key must be string when provided');
+  if (typeof wrappedKey !== 'string' || !wrappedKey.trim()) {
+    return badRequest('wrapped_key is required');
   }
 
-  if (typeof wrappedKeyAlg !== 'undefined' && wrappedKeyAlg !== null && typeof wrappedKeyAlg !== 'string') {
-    return badRequest('wrapped_key_alg must be string when provided');
+  if (typeof wrappedKeyAlg !== 'string' || !wrappedKeyAlg.trim()) {
+    return badRequest('wrapped_key_alg is required');
   }
 
-  if (typeof wrappedKeyKid !== 'undefined' && wrappedKeyKid !== null && typeof wrappedKeyKid !== 'string') {
-    return badRequest('wrapped_key_kid must be string when provided');
+  if (typeof wrappedKeyKid !== 'string' || !wrappedKeyKid.trim()) {
+    return badRequest('wrapped_key_kid is required');
   }
 
-  if (typeof wrappedKeyKid === 'string' && wrappedKeyKid.trim().length > MAX_KID_LENGTH) {
+  if (wrappedKeyKid.trim().length > MAX_KID_LENGTH) {
     return badRequest(`wrapped_key_kid must be <= ${MAX_KID_LENGTH} chars`);
   }
 
@@ -232,9 +232,9 @@ export async function threadMessageHandler({ request, env, url }: ThreadMessageH
     alg: alg.trim(),
     v: Number(version),
     kid: typeof kid === 'string' ? kid.trim() : null,
-    wrapped_key: typeof wrappedKey === 'string' ? wrappedKey.trim() : null,
-    wrapped_key_alg: typeof wrappedKeyAlg === 'string' ? wrappedKeyAlg.trim() : null,
-    wrapped_key_kid: typeof wrappedKeyKid === 'string' ? wrappedKeyKid.trim() : null,
+    wrapped_key: wrappedKey.trim(),
+    wrapped_key_alg: wrappedKeyAlg.trim(),
+    wrapped_key_kid: wrappedKeyKid.trim(),
   });
 
   const response: ThreadMessageStoreResponse = {
