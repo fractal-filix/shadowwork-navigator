@@ -36,6 +36,7 @@ let openAiResponsesMode = 'ok';
 let openAiResponsesRequestCount = 0;
 let lastOpenAiResponsesRequestJson = null;
 let mockKmsDecryptMode = 'ok';
+let mockAwsRequests = [];
 
 const MOCK_SESSION_ID = 'cs_test_123';
 const STRIPE_EVENT_ID = 'evt_test_123';
@@ -269,6 +270,19 @@ before(async () => {
       let raw = '';
       req.on('data', (chunk) => { raw += String(chunk); });
       req.on('end', () => {
+        mockAwsRequests.push({
+          path: '/sts',
+          method: req.method,
+          query: Object.fromEntries(url.searchParams.entries()),
+          headers: {
+            authorization: req.headers.authorization,
+            'x-amz-date': req.headers['x-amz-date'],
+            'x-amz-content-sha256': req.headers['x-amz-content-sha256'],
+            'content-type': req.headers['content-type'],
+          },
+          body: raw,
+        });
+
         const now = new Date();
         const exp = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
         const accessKey = 'ASIA_TEST_ACCESS_KEY';
@@ -333,6 +347,19 @@ before(async () => {
       const target = req.headers['x-amz-target'];
 
       if (target === 'TrentService.GetPublicKey') {
+        mockAwsRequests.push({
+          path: '/kms',
+          method: req.method,
+          target,
+          headers: {
+            authorization: req.headers.authorization,
+            'x-amz-date': req.headers['x-amz-date'],
+            'x-amz-content-sha256': req.headers['x-amz-content-sha256'],
+            'x-amz-security-token': req.headers['x-amz-security-token'],
+            'content-type': req.headers['content-type'],
+          },
+        });
+
         res.writeHead(200, { 'Content-Type': 'application/x-amz-json-1.1' });
         res.end(JSON.stringify({
           KeyId: MOCK_KMS_KEY_ID,
@@ -348,6 +375,20 @@ before(async () => {
         let raw = '';
         req.on('data', (chunk) => { raw += String(chunk); });
         req.on('end', () => {
+          mockAwsRequests.push({
+            path: '/kms',
+            method: req.method,
+            target,
+            body: raw,
+            headers: {
+              authorization: req.headers.authorization,
+              'x-amz-date': req.headers['x-amz-date'],
+              'x-amz-content-sha256': req.headers['x-amz-content-sha256'],
+              'x-amz-security-token': req.headers['x-amz-security-token'],
+              'content-type': req.headers['content-type'],
+            },
+          });
+
           try {
             const payload = JSON.parse(raw || '{}');
             if (mockKmsDecryptMode === 'sensitive_error') {
@@ -403,6 +444,7 @@ beforeEach(async () => {
     openAiResponsesRequestCount = 0;
     lastOpenAiResponsesRequestJson = null;
     mockKmsDecryptMode = 'ok';
+    mockAwsRequests = [];
     const workerPath = path.resolve('dist', 'worker.js');
 
     mf = new Miniflare({
@@ -1560,6 +1602,14 @@ test('GET /api/crypto/kms_public_key returns kid and PEM public key', async () =
   assert.equal(body.ok, true);
   assert.equal(body.kid, MOCK_KMS_KEY_ID);
   assert.equal(body.public_key_pem, formatPemFromBase64(mockKmsPublicKeyDerBase64));
+
+  const kmsRequest = mockAwsRequests.find((entry) => entry.target === 'TrentService.GetPublicKey');
+  assert.ok(kmsRequest);
+  assert.match(kmsRequest.headers.authorization, /^AWS4-HMAC-SHA256 /);
+  assert.match(kmsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-southeast-2\/kms\/aws4_request/);
+  assert.equal(kmsRequest.headers['x-amz-security-token'], undefined);
+  assert.match(String(kmsRequest.headers['x-amz-date']), /^\d{8}T\d{6}Z$/);
+  assert.equal(kmsRequest.headers['x-amz-content-sha256'], 'bf0bc0d63f1aff5d0c4ca250b32b55624a4ae3d6f5f947d8308ac6bde3d8f4f0');
 });
 
 test('GET /api/crypto/kms_public_key returns standardized internal error when KMS_KEY_ID is missing', async () => {
@@ -2446,6 +2496,23 @@ test('POST /api/crypto/dek/unseal returns dek_base64 when paid and request valid
   assert.equal(body.wrapped_key_kid, MOCK_KMS_KEY_ID);
   assert.equal(body.wrapped_key_alg, 'RSAES_OAEP_SHA_256');
   assert.equal(body.dek_base64, Buffer.from('dek-plaintext').toString('base64'));
+
+  const stsRequest = mockAwsRequests.find((entry) => entry.path === '/sts');
+  assert.ok(stsRequest);
+  assert.match(stsRequest.headers.authorization, /^AWS4-HMAC-SHA256 /);
+  assert.match(stsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-southeast-2\/sts\/aws4_request/);
+  assert.match(String(stsRequest.headers['x-amz-date']), /^\d{8}T\d{6}Z$/);
+  assert.equal(stsRequest.headers['x-amz-content-sha256'], 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  assert.equal(stsRequest.query.Action, 'AssumeRole');
+  assert.equal(stsRequest.query.RoleArn, 'arn:aws:iam::000000000000:role/test-assume-role');
+
+  const kmsRequest = mockAwsRequests.find((entry) => entry.target === 'TrentService.Decrypt');
+  assert.ok(kmsRequest);
+  assert.match(kmsRequest.headers.authorization, /^AWS4-HMAC-SHA256 /);
+  assert.match(kmsRequest.headers.authorization, /Credential=ASIA_TEST_ACCESS_KEY\/\d{8}\/ap-southeast-2\/kms\/aws4_request/);
+  assert.equal(kmsRequest.headers['x-amz-security-token'], 'TEST_SESSION_TOKEN');
+  assert.match(String(kmsRequest.headers['x-amz-date']), /^\d{8}T\d{6}Z$/);
+  assert.equal(kmsRequest.headers['x-amz-content-sha256'], 'cfa4c668421f2a3e5a8d4249727b6fe0aa1369a0ad5577ff2a3857108b069cf9');
 });
 
 test('POST /api/crypto/dek/unseal returns 403 when user is not paid', async () => {

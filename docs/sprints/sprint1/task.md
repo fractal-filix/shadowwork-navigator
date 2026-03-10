@@ -136,7 +136,8 @@
 - [x] 4.4.1 用途/権限制御を確定（βでは“本人操作のみ”、監査ログ必須）（4pt）
 - [x] 4.4.2 実装: Workers → AWS KMS Decrypt（SigV4署名）（5pt）
 - [x] 4.4.3 注意: 平文DEKをログへ出さない（メトリクス/例外も含む）（2pt）
-- [ ] 4.5 API: AWS SigV4署名の実装（KMS呼び出し用）（7pt）
+- [x] 4.5 API: AWS SigV4署名の実装（KMS呼び出し用）（7pt）
+	- 検証: `GET /api/crypto/kms_public_key` と `POST /api/crypto/dek/unseal` の統合テストで、KMS/STS への `AWS4-HMAC-SHA256` Authorization, `x-amz-date`, `x-amz-content-sha256`, `x-amz-security-token` を確認
 
 ## 2026.03.11
 - [ ] 4.6 運用: Decrypt（アンラップ）操作の監査メタを記録（操作者、理由、timestamp、対象thread/message等）（4pt）
