@@ -141,6 +141,62 @@ function buildAuthHeaders(memberId) {
   };
 }
 
+async function applyDdl(targetDb) {
+  let execRes;
+  try {
+    execRes = await targetDb.exec(ddlSql);
+    if (!execRes) throw new Error('db.exec returned falsy');
+    console.log('applyDdl: Applied full DDL', { execRes });
+  } catch (err) {
+    console.warn('applyDdl: db.exec failed, attempting to apply DDL statements one-by-one:', err?.message ?? String(err));
+
+    const lines = ddlSql.split(/\r?\n/);
+    const statements = [];
+    let cur = [];
+    let inTrigger = false;
+
+    for (let rawLine of lines) {
+      const line = rawLine;
+      const t = line.trim();
+      if (t.startsWith('--') && cur.length === 0) continue;
+
+      const up = t.toUpperCase();
+      if (!inTrigger && up.startsWith('CREATE TRIGGER')) inTrigger = true;
+
+      cur.push(line);
+
+      if (inTrigger) {
+        if (/END;$/i.test(t)) {
+          statements.push(cur.join('\n'));
+          cur = [];
+          inTrigger = false;
+        }
+      } else if (/;\s*$/.test(t)) {
+        statements.push(cur.join('\n'));
+        cur = [];
+      }
+    }
+    if (cur.length) statements.push(cur.join('\n'));
+
+    let ran = 0;
+    for (const s of statements) {
+      const sql = s.trim();
+      if (!sql) continue;
+      try {
+        await targetDb.prepare(sql).run();
+        ran++;
+      } catch (e) {
+        console.warn('applyDdl: failed to run statement (skipping)', e.message, { snippet: sql.slice(0, 120) });
+      }
+    }
+
+    execRes = { fallback: true, statementsRun: ran };
+    console.log('applyDdl: fallback DDL applied (statements run)', execRes);
+  }
+
+  return execRes;
+}
+
 before(async () => {
   const ddlPath = path.resolve('database', 'DDL.sql');
   ddlSql = await fs.readFile(ddlPath, 'utf8');
@@ -278,65 +334,7 @@ beforeEach(async () => {
 
     if (!ddlSql || ddlSql.trim().length === 0) throw new Error('DDL.sql が読み込まれていません');
 
-    // Try applying full DDL; if Miniflare's D1.exec has an issue in this environment,
-    // fall back to creating the minimal tables required by these tests.
-    let execRes;
-    try {
-      execRes = await db.exec(ddlSql);
-      if (!execRes) throw new Error('db.exec returned falsy');
-      console.log('beforeEach: Applied full DDL', { execRes });
-    } catch (err) {
-      console.warn('beforeEach: db.exec failed, attempting to apply DDL statements one-by-one:', err?.message ?? String(err));
-
-      // Some D1 runtimes / Miniflare may not accept multi-statement exec.
-      // As a safer fallback, split the DDL into individual statements
-      // while taking CREATE TRIGGER blocks into account, then run each
-      // statement via `prepare().run()`.
-      const lines = ddlSql.split(/\r?\n/);
-      const statements = [];
-      let cur = [];
-      let inTrigger = false;
-
-      for (let rawLine of lines) {
-        const line = rawLine;
-        const t = line.trim();
-        if (t.startsWith('--') && cur.length === 0) continue; // skip top-level comments
-
-        const up = t.toUpperCase();
-        if (!inTrigger && up.startsWith('CREATE TRIGGER')) inTrigger = true;
-
-        cur.push(line);
-
-        if (inTrigger) {
-          if (/END;$/i.test(t)) {
-            statements.push(cur.join('\n'));
-            cur = [];
-            inTrigger = false;
-          }
-        } else {
-          if (/;\s*$/.test(t)) {
-            statements.push(cur.join('\n'));
-            cur = [];
-          }
-        }
-      }
-      if (cur.length) statements.push(cur.join('\n'));
-
-      let ran = 0;
-      for (const s of statements) {
-        const sql = s.trim();
-        if (!sql) continue;
-        try {
-          await db.prepare(sql).run();
-          ran++;
-        } catch (e) {
-          console.warn('beforeEach: failed to run statement (skipping)', e.message, { snippet: sql.slice(0, 120) });
-        }
-      }
-
-      execRes = { fallback: true, statementsRun: ran };
-      console.log('beforeEach: fallback DDL applied (statements run)', execRes);
-    }
+    await applyDdl(db);
 
   } catch (err) {
     console.error('beforeEach のセットアップで失敗:', err?.message ?? String(err));
@@ -362,6 +360,50 @@ after(async () => {
 // --------------------------------------------------
 // 統合テスト本体
 // --------------------------------------------------
+
+test('DDL schema excludes legacy cards table and indexes', async () => {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cards (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      thread_id TEXT,
+      user_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      content TEXT NOT NULL,
+      content_iv TEXT NOT NULL,
+      content_alg TEXT NOT NULL,
+      content_v INTEGER NOT NULL DEFAULT 1,
+      content_kid TEXT,
+      created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+      updated_at TEXT NOT NULL DEFAULT (DATETIME('now'))
+    )
+  `).run();
+  await db.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_thread_kind
+      ON cards(thread_id, kind)
+  `).run();
+  await db.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_run_kind
+      ON cards(run_id, kind)
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cards_user_created
+      ON cards(user_id, created_at)
+  `).run();
+
+  await applyDdl(db);
+
+  const result = await db
+    .prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE name = 'cards' OR name LIKE 'idx_cards_%'
+      ORDER BY name
+    `)
+    .all();
+
+  assert.deepEqual(result.results, []);
+});
 
 // 短い検証: テストで生成するJWTがローカルで検証できるか確認する（切り分け用）
 test('local JWT verify works', async () => {
@@ -927,7 +969,7 @@ test('POST /api/thread/chat returns standardized internal error when OpenAI retu
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
+    body: JSON.stringify({ message: 'hello' }),
   });
 
   assert.equal(res.status, 502);
@@ -963,7 +1005,7 @@ test('POST /api/thread/chat returns standardized internal error when OpenAI retu
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
+    body: JSON.stringify({ message: 'hello' }),
   });
 
   assert.equal(res.status, 502);
@@ -999,7 +1041,7 @@ test('POST /api/thread/chat returns standardized internal error when OpenAI fetc
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
+    body: JSON.stringify({ message: 'hello' }),
   });
 
   assert.equal(res.status, 502);
@@ -1033,7 +1075,7 @@ test('POST /api/thread/chat returns bad request when message is too long', async
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'a'.repeat(2001), context_card: '- 感情: 不安' }),
+    body: JSON.stringify({ message: 'a'.repeat(2001) }),
   });
 
   assert.equal(res.status, 400);
@@ -1104,7 +1146,7 @@ test('POST /api/thread/chat does not persist plaintext message', async () => {
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello from chat', context_card: '- 感情: 不安' }),
+    body: JSON.stringify({ message: 'hello from chat' }),
   });
 
   assert.equal(res.status, 200);
@@ -1119,7 +1161,7 @@ test('POST /api/thread/chat does not persist plaintext message', async () => {
   assert.equal(countRow?.count, 0);
 });
 
-test('POST /api/thread/chat returns bad request when context_card is missing', async () => {
+test('POST /api/thread/chat accepts message without legacy card fields', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
     .bind(MEMBER_ID)
@@ -1146,13 +1188,13 @@ test('POST /api/thread/chat returns bad request when context_card is missing', a
     body: JSON.stringify({ message: 'hello' }),
   });
 
-  assert.equal(res.status, 400);
+  assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.error?.code, 'BAD_REQUEST');
+  assert.equal(body.ok, true);
+  assert.equal(body.reply, 'mock reply');
 });
 
-test('POST /api/thread/chat returns bad request when context_card exceeds 200 chars', async () => {
+test('POST /api/thread/chat ignores legacy card fields when calling OpenAI', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
     .bind(MEMBER_ID)
@@ -1176,42 +1218,11 @@ test('POST /api/thread/chat returns bad request when context_card exceeds 200 ch
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello', context_card: 'あ'.repeat(201) }),
-  });
-
-  assert.equal(res.status, 400);
-  const body = await res.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.error?.code, 'BAD_REQUEST');
-});
-
-test('POST /api/thread/chat sends context_card to OpenAI input', async () => {
-  await db
-    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
-    .bind(MEMBER_ID)
-    .run();
-
-  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
-    method: 'POST',
-    headers: buildAuthHeaders(MEMBER_ID),
-  });
-  assert.equal(runRes.status, 200);
-
-  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
-    method: 'POST',
-    headers: buildAuthHeaders(MEMBER_ID),
-  });
-  assert.equal(threadStartRes.status, 200);
-
-  const contextCard = '- 感情: 不安\n- 引き金: 評価される場面';
-
-  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders(MEMBER_ID),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ message: 'hello', context_card: contextCard }),
+    body: JSON.stringify({
+      message: 'hello',
+      context_card: 'あ'.repeat(201),
+      step2_meta_card: 'legacy meta card',
+    }),
   });
 
   assert.equal(res.status, 200);
@@ -1220,11 +1231,52 @@ test('POST /api/thread/chat sends context_card to OpenAI input', async () => {
 
   const input = lastOpenAiResponsesRequestJson.input;
   assert.ok(Array.isArray(input));
-  const hasContextCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes(contextCard));
-  assert.equal(hasContextCard, true);
+  const hasLegacyCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes('あ'.repeat(201)));
+  const hasLegacyMetaCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes('legacy meta card'));
+  assert.equal(hasLegacyCard, false);
+  assert.equal(hasLegacyMetaCard, false);
 });
 
-test('POST /api/thread/chat sends step2_meta_card to OpenAI only on step2', async () => {
+test('POST /api/thread/chat sends only system prompt and user message to OpenAI', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: 'hello' }),
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(openAiResponsesRequestCount, 1);
+  assert.ok(lastOpenAiResponsesRequestJson);
+
+  const input = lastOpenAiResponsesRequestJson.input;
+  assert.ok(Array.isArray(input));
+  assert.equal(input.length, 2);
+  assert.equal(input[0]?.role, 'system');
+  assert.equal(input[1]?.role, 'user');
+  assert.equal(input[1]?.content, 'hello');
+});
+
+test('POST /api/thread/chat ignores legacy step2_meta_card on step2', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
     .bind(MEMBER_ID)
@@ -1244,7 +1296,6 @@ test('POST /api/thread/chat sends step2_meta_card to OpenAI only on step2', asyn
     .bind('thread-step2-active-1', runId, MEMBER_ID, 'active')
     .run();
 
-  const contextCard = '- 感情: 恥\n- 反応: 過剰適応';
   const metaCard = '- Step2洞察: 怒りの下に恐れがある';
 
   const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
@@ -1255,7 +1306,6 @@ test('POST /api/thread/chat sends step2_meta_card to OpenAI only on step2', asyn
     },
     body: JSON.stringify({
       message: 'session2 を進めたい',
-      context_card: contextCard,
       step2_meta_card: metaCard,
     }),
   });
@@ -1267,7 +1317,7 @@ test('POST /api/thread/chat sends step2_meta_card to OpenAI only on step2', asyn
   const input = lastOpenAiResponsesRequestJson.input;
   assert.ok(Array.isArray(input));
   const hasMetaCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes(metaCard));
-  assert.equal(hasMetaCard, true);
+  assert.equal(hasMetaCard, false);
 });
 
 test('POST /api/thread/message persists encrypted payload and GET /api/thread/messages returns encrypted fields', async () => {
@@ -1497,7 +1547,7 @@ test('POST /api/thread/message returns 400 when id fields exceed max length', as
   }
 });
 
-test('POST/GET /api/thread/context_card stores and returns encrypted context card', async () => {
+test('POST/GET /api/thread/context_card returns 404 after endpoint removal', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
     .bind(MEMBER_ID)
@@ -1534,26 +1584,17 @@ test('POST/GET /api/thread/context_card stores and returns encrypted context car
     }),
   });
 
-  assert.equal(saveRes.status, 200);
-  const saveBody = await saveRes.json();
-  assert.equal(saveBody.ok, true);
+  assert.equal(saveRes.status, 404);
 
   const getRes = await mf.dispatchFetch(`http://localhost/api/thread/context_card?thread_id=${threadId}`, {
     method: 'GET',
     headers: buildAuthHeaders(MEMBER_ID),
   });
 
-  assert.equal(getRes.status, 200);
-  const getBody = await getRes.json();
-  assert.equal(getBody.ok, true);
-  assert.equal(getBody.card.ciphertext, 'ctx-cipher-1');
-  assert.equal(getBody.card.iv, 'ctx-iv-1');
-  assert.equal(getBody.card.alg, 'AES-256-GCM');
-  assert.equal(getBody.card.v, 1);
-  assert.equal(getBody.card.kid, 'k-ctx-1');
+  assert.equal(getRes.status, 404);
 });
 
-test('POST/GET /api/run/step2_meta_card stores and returns encrypted run-level card', async () => {
+test('POST/GET /api/run/step2_meta_card returns 404 after endpoint removal', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
     .bind(MEMBER_ID)
@@ -1580,23 +1621,41 @@ test('POST/GET /api/run/step2_meta_card stores and returns encrypted run-level c
     }),
   });
 
-  assert.equal(saveRes.status, 200);
-  const saveBody = await saveRes.json();
-  assert.equal(saveBody.ok, true);
+  assert.equal(saveRes.status, 404);
 
   const getRes = await mf.dispatchFetch('http://localhost/api/run/step2_meta_card', {
     method: 'GET',
     headers: buildAuthHeaders(MEMBER_ID),
   });
 
-  assert.equal(getRes.status, 200);
-  const getBody = await getRes.json();
-  assert.equal(getBody.ok, true);
-  assert.equal(getBody.card.ciphertext, 'meta-cipher-1');
-  assert.equal(getBody.card.iv, 'meta-iv-1');
-  assert.equal(getBody.card.alg, 'AES-256-GCM');
-  assert.equal(getBody.card.v, 1);
-  assert.equal(getBody.card.kid, 'k-meta-1');
+  assert.equal(getRes.status, 404);
+});
+
+test('API type definitions exclude legacy card contracts', async () => {
+  const apiTypesPath = path.resolve(process.cwd(), 'src/types/api.ts');
+  const databaseTypesPath = path.resolve(process.cwd(), 'src/types/database.ts');
+  const [apiTypesSource, databaseTypesSource] = await Promise.all([
+    fs.readFile(apiTypesPath, 'utf8'),
+    fs.readFile(databaseTypesPath, 'utf8'),
+  ]);
+
+  assert.equal(apiTypesSource.includes('EncryptedCardPayload'), false);
+  assert.equal(apiTypesSource.includes('ThreadContextCardResponse'), false);
+  assert.equal(apiTypesSource.includes('RunStep2MetaCardResponse'), false);
+  assert.equal(databaseTypesSource.includes('CardKind'), false);
+  assert.equal(databaseTypesSource.includes('CardRow'), false);
+});
+
+test('API specification excludes legacy card endpoints and request fields', async () => {
+  const apiSpecPath = path.resolve(process.cwd(), 'documents/基本設計書/20_API仕様.md');
+  const apiSpecSource = await fs.readFile(apiSpecPath, 'utf8');
+
+  assert.equal(apiSpecSource.includes('/api/thread/context_card'), false);
+  assert.equal(apiSpecSource.includes('/api/run/step2_meta_card'), false);
+  assert.equal(apiSpecSource.includes('`context_card` は必須'), false);
+  assert.equal(apiSpecSource.includes('`step2_meta_card` は Step2 の thread では必須'), false);
+  assert.equal(apiSpecSource.includes('"context_card":'), false);
+  assert.equal(apiSpecSource.includes('"step2_meta_card":'), false);
 });
 
 test('GET /api/thread/state returns encrypted last_message when message exists', async () => {
@@ -1943,7 +2002,7 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
       ...buildAuthHeaders(MEMBER_ID),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message: 'hello', context_card: '- 感情: 不安' }),
+    body: JSON.stringify({ message: 'hello' }),
   });
 
   assert.equal(messageRes.status, 200);

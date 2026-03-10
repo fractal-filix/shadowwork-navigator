@@ -67,67 +67,88 @@ function Update-WranglerTomlD1Binding {
   )
 
   $raw = Get-Content -Path $TomlPath -Raw -Encoding UTF8
+  $newline = if ($raw.Contains("`r`n")) { "`r`n" } else { "`n" }
+  $lines = [System.Collections.Generic.List[string]]::new()
+  foreach ($line in ($raw -split '\r?\n')) {
+    $lines.Add($line)
+  }
 
   # 対象環境に応じた d1_databases ブロックを抽出し、指定 binding のブロックを探す
   if ($TargetEnvironment) {
-    $headerPattern = '^\[\[env\.' + [regex]::Escape($TargetEnvironment) + '\.d1_databases\]\]'
     $appendHeader = "[[env.$TargetEnvironment.d1_databases]]"
   }
   else {
-    $headerPattern = '^\[\[d1_databases\]\]'
     $appendHeader = '[[d1_databases]]'
   }
 
-  $blockPattern = '(?ms)' + $headerPattern + '\s*\r?\n(?:(?!^\[).*(?:\r?\n|$))*'
-  $tomlBlocks = [regex]::Matches($raw, $blockPattern)
+  $selectedStart = -1
+  $selectedEnd = -1
+  $bindingPattern = '(?m)^binding\s*=\s*"' + [regex]::Escape($TargetBinding) + '"\s*$'
 
-  $selected = $null
-  foreach ($match in $tomlBlocks) {
-    if ($match.Value -match ('(?m)^binding\s*=\s*"' + [regex]::Escape($TargetBinding) + '"\s*$')) {
-      $selected = $match
+  for ($index = 0; $index -lt $lines.Count; $index++) {
+    if ($lines[$index].Trim() -ne $appendHeader) {
+      continue
+    }
+
+    $blockEnd = $index + 1
+    while ($blockEnd -lt $lines.Count -and -not $lines[$blockEnd].TrimStart().StartsWith('[')) {
+      $blockEnd++
+    }
+
+    $blockRaw = (($lines[$index..($blockEnd - 1)]) -join $newline)
+    if ($blockRaw -match $bindingPattern) {
+      $selectedStart = $index
+      $selectedEnd = $blockEnd
       break
     }
   }
 
-  if ($null -eq $selected) {
+  if ($selectedStart -lt 0) {
     # 指定 binding が存在しない場合は末尾に新規追加
-    $append = @"
-
-$appendHeader
-binding = "$TargetBinding"
-database_name = "$TargetDatabaseName"
-database_id = "$TargetDatabaseId"
-"@
-    $updatedRaw = $raw.TrimEnd() + $append + "`n"
+    while ($lines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+      $lines.RemoveAt($lines.Count - 1)
+    }
+    if ($lines.Count -gt 0) {
+      $lines.Add('')
+    }
+    $lines.Add($appendHeader)
+    $lines.Add("binding = `"$TargetBinding`"")
+    $lines.Add("database_name = `"$TargetDatabaseName`"")
+    $lines.Add("database_id = `"$TargetDatabaseId`"")
   }
   else {
     # 既存 binding がある場合は database_name / database_id のみ更新
-    $updatedBlock = $selected.Value
+    $updatedBlockLines = [System.Collections.Generic.List[string]]::new()
+    $nameUpdated = $false
+    $idUpdated = $false
 
-    if ($updatedBlock -match '(?m)^database_name\s*=\s*"[^"]*"\s*$') {
-      $updatedBlock = [regex]::Replace(
-        $updatedBlock,
-        '(?m)^database_name\s*=\s*"[^"]*"\s*$',
-        "database_name = `"$TargetDatabaseName`""
-      )
-    }
-    else {
-      $updatedBlock = $updatedBlock.TrimEnd() + "`r`ndatabase_name = `"$TargetDatabaseName`"`r`n"
-    }
-
-    if ($updatedBlock -match '(?m)^database_id\s*=\s*"[^"]*"\s*$') {
-      $updatedBlock = [regex]::Replace(
-        $updatedBlock,
-        '(?m)^database_id\s*=\s*"[^"]*"\s*$',
-        "database_id = `"$TargetDatabaseId`""
-      )
-    }
-    else {
-      $updatedBlock = $updatedBlock.TrimEnd() + "`r`ndatabase_id = `"$TargetDatabaseId`"`r`n"
+    for ($index = $selectedStart; $index -lt $selectedEnd; $index++) {
+      $line = $lines[$index]
+      if ($line -match '(?m)^database_name\s*=\s*"[^"]*"\s*$') {
+        $updatedBlockLines.Add("database_name = `"$TargetDatabaseName`"")
+        $nameUpdated = $true
+        continue
+      }
+      if ($line -match '(?m)^database_id\s*=\s*"[^"]*"\s*$') {
+        $updatedBlockLines.Add("database_id = `"$TargetDatabaseId`"")
+        $idUpdated = $true
+        continue
+      }
+      $updatedBlockLines.Add($line)
     }
 
-    $updatedRaw = $raw.Substring(0, $selected.Index) + $updatedBlock + $raw.Substring($selected.Index + $selected.Length)
+    if (-not $nameUpdated) {
+      $updatedBlockLines.Add("database_name = `"$TargetDatabaseName`"")
+    }
+    if (-not $idUpdated) {
+      $updatedBlockLines.Add("database_id = `"$TargetDatabaseId`"")
+    }
+
+    $lines.RemoveRange($selectedStart, $selectedEnd - $selectedStart)
+    $lines.InsertRange($selectedStart, $updatedBlockLines)
   }
+
+  $updatedRaw = ($lines -join $newline).TrimEnd() + $newline
 
   # BOMなしUTF-8で書き戻し（差分を安定化）
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -153,13 +174,13 @@ if ($Environment) {
 $executeArgs = @("d1", "execute", $DatabaseName, "--file", $DdlPath) + $envArgs
 if ($RemoteExecute) {
   # staging/production などの実環境に適用する場合は --remote を付与する。
-  $executeArgs += "--remote"
+  $executeArgs += @("--remote", "-y")
 }
 
 if ($DeleteExisting) {
   # 既存DBを削除してから作り直したい場合のみ実行（破壊的）
   try {
-    Invoke-Wrangler -CommandArgs (@("d1", "delete", $DatabaseName) + $envArgs)
+    Invoke-Wrangler -CommandArgs (@("d1", "delete", $DatabaseName, "-y") + $envArgs)
   }
   catch {
     Write-Warning "既存DBの削除に失敗しました（未作成の可能性あり）。作成処理を続行します。詳細: $($_.Exception.Message)"
