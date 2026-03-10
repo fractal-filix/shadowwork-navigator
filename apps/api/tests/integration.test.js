@@ -141,6 +141,62 @@ function buildAuthHeaders(memberId) {
   };
 }
 
+async function applyDdl(targetDb) {
+  let execRes;
+  try {
+    execRes = await targetDb.exec(ddlSql);
+    if (!execRes) throw new Error('db.exec returned falsy');
+    console.log('applyDdl: Applied full DDL', { execRes });
+  } catch (err) {
+    console.warn('applyDdl: db.exec failed, attempting to apply DDL statements one-by-one:', err?.message ?? String(err));
+
+    const lines = ddlSql.split(/\r?\n/);
+    const statements = [];
+    let cur = [];
+    let inTrigger = false;
+
+    for (let rawLine of lines) {
+      const line = rawLine;
+      const t = line.trim();
+      if (t.startsWith('--') && cur.length === 0) continue;
+
+      const up = t.toUpperCase();
+      if (!inTrigger && up.startsWith('CREATE TRIGGER')) inTrigger = true;
+
+      cur.push(line);
+
+      if (inTrigger) {
+        if (/END;$/i.test(t)) {
+          statements.push(cur.join('\n'));
+          cur = [];
+          inTrigger = false;
+        }
+      } else if (/;\s*$/.test(t)) {
+        statements.push(cur.join('\n'));
+        cur = [];
+      }
+    }
+    if (cur.length) statements.push(cur.join('\n'));
+
+    let ran = 0;
+    for (const s of statements) {
+      const sql = s.trim();
+      if (!sql) continue;
+      try {
+        await targetDb.prepare(sql).run();
+        ran++;
+      } catch (e) {
+        console.warn('applyDdl: failed to run statement (skipping)', e.message, { snippet: sql.slice(0, 120) });
+      }
+    }
+
+    execRes = { fallback: true, statementsRun: ran };
+    console.log('applyDdl: fallback DDL applied (statements run)', execRes);
+  }
+
+  return execRes;
+}
+
 before(async () => {
   const ddlPath = path.resolve('database', 'DDL.sql');
   ddlSql = await fs.readFile(ddlPath, 'utf8');
@@ -278,65 +334,7 @@ beforeEach(async () => {
 
     if (!ddlSql || ddlSql.trim().length === 0) throw new Error('DDL.sql が読み込まれていません');
 
-    // Try applying full DDL; if Miniflare's D1.exec has an issue in this environment,
-    // fall back to creating the minimal tables required by these tests.
-    let execRes;
-    try {
-      execRes = await db.exec(ddlSql);
-      if (!execRes) throw new Error('db.exec returned falsy');
-      console.log('beforeEach: Applied full DDL', { execRes });
-    } catch (err) {
-      console.warn('beforeEach: db.exec failed, attempting to apply DDL statements one-by-one:', err?.message ?? String(err));
-
-      // Some D1 runtimes / Miniflare may not accept multi-statement exec.
-      // As a safer fallback, split the DDL into individual statements
-      // while taking CREATE TRIGGER blocks into account, then run each
-      // statement via `prepare().run()`.
-      const lines = ddlSql.split(/\r?\n/);
-      const statements = [];
-      let cur = [];
-      let inTrigger = false;
-
-      for (let rawLine of lines) {
-        const line = rawLine;
-        const t = line.trim();
-        if (t.startsWith('--') && cur.length === 0) continue; // skip top-level comments
-
-        const up = t.toUpperCase();
-        if (!inTrigger && up.startsWith('CREATE TRIGGER')) inTrigger = true;
-
-        cur.push(line);
-
-        if (inTrigger) {
-          if (/END;$/i.test(t)) {
-            statements.push(cur.join('\n'));
-            cur = [];
-            inTrigger = false;
-          }
-        } else {
-          if (/;\s*$/.test(t)) {
-            statements.push(cur.join('\n'));
-            cur = [];
-          }
-        }
-      }
-      if (cur.length) statements.push(cur.join('\n'));
-
-      let ran = 0;
-      for (const s of statements) {
-        const sql = s.trim();
-        if (!sql) continue;
-        try {
-          await db.prepare(sql).run();
-          ran++;
-        } catch (e) {
-          console.warn('beforeEach: failed to run statement (skipping)', e.message, { snippet: sql.slice(0, 120) });
-        }
-      }
-
-      execRes = { fallback: true, statementsRun: ran };
-      console.log('beforeEach: fallback DDL applied (statements run)', execRes);
-    }
+    await applyDdl(db);
 
   } catch (err) {
     console.error('beforeEach のセットアップで失敗:', err?.message ?? String(err));
@@ -362,6 +360,50 @@ after(async () => {
 // --------------------------------------------------
 // 統合テスト本体
 // --------------------------------------------------
+
+test('DDL schema excludes legacy cards table and indexes', async () => {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cards (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      thread_id TEXT,
+      user_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      content TEXT NOT NULL,
+      content_iv TEXT NOT NULL,
+      content_alg TEXT NOT NULL,
+      content_v INTEGER NOT NULL DEFAULT 1,
+      content_kid TEXT,
+      created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+      updated_at TEXT NOT NULL DEFAULT (DATETIME('now'))
+    )
+  `).run();
+  await db.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_thread_kind
+      ON cards(thread_id, kind)
+  `).run();
+  await db.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_run_kind
+      ON cards(run_id, kind)
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cards_user_created
+      ON cards(user_id, created_at)
+  `).run();
+
+  await applyDdl(db);
+
+  const result = await db
+    .prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE name = 'cards' OR name LIKE 'idx_cards_%'
+      ORDER BY name
+    `)
+    .all();
+
+  assert.deepEqual(result.results, []);
+});
 
 // 短い検証: テストで生成するJWTがローカルで検証できるか確認する（切り分け用）
 test('local JWT verify works', async () => {

@@ -153,13 +153,13 @@ if ($Environment) {
 $executeArgs = @("d1", "execute", $DatabaseName, "--file", $DdlPath) + $envArgs
 if ($RemoteExecute) {
   # staging/production などの実環境に適用する場合は --remote を付与する。
-  $executeArgs += "--remote"
+  $executeArgs += @("--remote", "-y")
 }
 
 if ($DeleteExisting) {
   # 既存DBを削除してから作り直したい場合のみ実行（破壊的）
   try {
-    Invoke-Wrangler -CommandArgs (@("d1", "delete", $DatabaseName) + $envArgs)
+    Invoke-Wrangler -CommandArgs (@("d1", "delete", $DatabaseName, "-y") + $envArgs)
   }
   catch {
     Write-Warning "既存DBの削除に失敗しました（未作成の可能性あり）。作成処理を続行します。詳細: $($_.Exception.Message)"

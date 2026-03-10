@@ -19,7 +19,7 @@ name = "filix-shadowwork-api-staging"
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "filix_shadowwork_stg"
-database_id = "441982e1-251f-4641-bc5a-026ccd593889"
+database_id = "ee4ec2f0-4c30-4ded-9dca-4ff1a1339446"
 [env.production.vars]
 APP_ENV = "production"
 ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
@@ -44,4 +44,4 @@ custom_domain = true
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "filix_shadowwork_prod"
-database_id = "41a2bbde-36bc-4a3e-8f80-a6a60be7d42a"
+database_id = "17036326-9667-4179-ac72-c0388bc73251"
