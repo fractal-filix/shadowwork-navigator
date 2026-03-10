@@ -76,12 +76,19 @@ pnpm exec wrangler secret list --env production
 
 必須 Secrets（3/1時点）:
 - `ADMIN_MEMBER_IDS`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `KMS_KEY_ID`
 - `JWT_SIGNING_SECRET`
 - `OPENAI_API_KEY`
 - `PAID_ADMIN_TOKEN`
 - `STRIPE_PRICE_ID`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
+
+補足:
+- `GET /api/crypto/kms_public_key` を利用する場合、`KMS_KEY_ID` は必須です。
+- ローカル/テストで KMS モックへ向ける場合のみ `AWS_KMS_BASE_URL` を任意で使えます。
 
 登録コマンド例:
 

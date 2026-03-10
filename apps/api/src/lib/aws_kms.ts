@@ -150,3 +150,56 @@ export async function kmsDecrypt(
     keyId: data.KeyId,
   };
 }
+
+export async function kmsGetPublicKey(
+  credentials: AwsCredentials,
+  region: string,
+  params: {
+    keyId: string;
+    endpoint?: string;
+  }
+): Promise<{ publicKeyBase64: string; keyId?: string; keySpec?: string; encryptionAlgorithms?: string[] }> {
+  const url = params.endpoint?.trim() || `https://kms.${region}.amazonaws.com/`;
+  const body = JSON.stringify({ KeyId: params.keyId });
+
+  const response = await signedFetch(
+    url,
+    'POST',
+    'kms',
+    region,
+    credentials,
+    body,
+    {
+      'content-type': 'application/x-amz-json-1.1',
+      'x-amz-target': 'TrentService.GetPublicKey',
+    }
+  );
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`KMS GetPublicKey failed (${response.status}): ${text}`);
+  }
+
+  const data = JSON.parse(text) as {
+    PublicKey?: string;
+    KeyId?: string;
+    KeySpec?: string;
+    EncryptionAlgorithms?: string[];
+  };
+
+  if (!data.PublicKey) {
+    throw new Error('KMS GetPublicKey response missing PublicKey');
+  }
+
+  return {
+    publicKeyBase64: data.PublicKey,
+    keyId: data.KeyId,
+    keySpec: data.KeySpec,
+    encryptionAlgorithms: data.EncryptionAlgorithms,
+  };
+}
+
+export function publicKeyBase64ToPem(publicKeyBase64: string): string {
+  const lines = publicKeyBase64.match(/.{1,64}/g) || [];
+  return `-----BEGIN PUBLIC KEY-----\n${lines.join('\n')}\n-----END PUBLIC KEY-----\n`;
+}

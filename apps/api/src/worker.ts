@@ -23,6 +23,7 @@ import { llmRespondHandler } from "./handlers/llm_respond.js";
 
 import { stripeWebhookHandler } from "./handlers/stripe_webhook.js";
 import { dekUnsealHandler } from "./handlers/dek_unseal.js";
+import { kmsPublicKeyHandler } from "./handlers/kms_public_key.js";
 
 const router = createRouter();
 
@@ -85,6 +86,7 @@ router.on("POST", "/api/llm/respond", llmRespondHandler);
 
 // stripe webhook
 router.on("POST", "/api/stripe/webhook", stripeWebhookHandler);
+router.on("GET", "/api/crypto/kms_public_key", kmsPublicKeyHandler);
 router.on("POST", "/api/crypto/dek/unseal", dekUnsealHandler);
 
 const worker: ExportedHandler<Env> = {

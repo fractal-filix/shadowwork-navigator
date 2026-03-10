@@ -14,6 +14,10 @@ const SUPABASE_KID = 'supabase-test-kid';
 const { privateKey: supabasePrivateKey, publicKey: supabasePublicKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 2048,
 });
+const MOCK_KMS_KEY_ID = 'arn:aws:kms:ap-southeast-2:555569220922:key/test-kms-key';
+const mockKmsPublicKeyDerBase64 = Buffer.from(
+  supabasePublicKey.export({ type: 'spki', format: 'der' })
+).toString('base64');
 const supabasePublicJwk = {
   ...(supabasePublicKey.export({ format: 'jwk' })),
   kid: SUPABASE_KID,
@@ -107,6 +111,11 @@ function createSupabaseAccessToken(memberId, payloadOverrides = {}, headerOverri
   return `${data}.${signature}`;
 }
 
+function formatPemFromBase64(base64Body) {
+  const lines = base64Body.match(/.{1,64}/g) || [];
+  return `-----BEGIN PUBLIC KEY-----\n${lines.join('\n')}\n-----END PUBLIC KEY-----\n`;
+}
+
 function buildEnvBindings() {
   return {
     APP_ENV: 'test',
@@ -130,7 +139,12 @@ function buildEnvBindings() {
     SUPABASE_ISSUER,
     SUPABASE_AUDIENCE,
     ALLOWED_ORIGINS: 'http://localhost:3000',
-    ADMIN_MEMBER_IDS: 'member-admin'
+    ADMIN_MEMBER_IDS: 'member-admin',
+    AWS_REGION: 'ap-southeast-2',
+    AWS_ACCESS_KEY_ID: 'test-aws-access-key',
+    AWS_SECRET_ACCESS_KEY: 'test-aws-secret-key',
+    KMS_KEY_ID: MOCK_KMS_KEY_ID,
+    AWS_KMS_BASE_URL: `${mockBaseUrl}/kms`,
   };
 }
 
@@ -291,6 +305,26 @@ before(async () => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ output_text: 'mock reply' }));
       });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/kms') {
+      const target = req.headers['x-amz-target'];
+
+      if (target === 'TrentService.GetPublicKey') {
+        res.writeHead(200, { 'Content-Type': 'application/x-amz-json-1.1' });
+        res.end(JSON.stringify({
+          KeyId: MOCK_KMS_KEY_ID,
+          KeySpec: 'RSA_2048',
+          KeyUsage: 'ENCRYPT_DECRYPT',
+          EncryptionAlgorithms: ['RSAES_OAEP_SHA_1', 'RSAES_OAEP_SHA_256'],
+          PublicKey: mockKmsPublicKeyDerBase64,
+        }));
+        return;
+      }
+
+      res.writeHead(400, { 'Content-Type': 'application/x-amz-json-1.1' });
+      res.end(JSON.stringify({ message: 'unsupported x-amz-target' }));
       return;
     }
 
@@ -1463,6 +1497,41 @@ test('POST /api/thread/message rejects payload without wrapped key fields', asyn
     .first();
 
   assert.equal(raw?.count, 0);
+});
+
+test('GET /api/crypto/kms_public_key returns kid and PEM public key', async () => {
+  const res = await mf.dispatchFetch('http://localhost/api/crypto/kms_public_key');
+
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.kid, MOCK_KMS_KEY_ID);
+  assert.equal(body.public_key_pem, formatPemFromBase64(mockKmsPublicKeyDerBase64));
+});
+
+test('GET /api/crypto/kms_public_key returns standardized internal error when KMS_KEY_ID is missing', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-kms-public-key-missing-key-id' },
+    bindings: {
+      ...buildEnvBindings(),
+      KMS_KEY_ID: '',
+    },
+  });
+
+  try {
+    const res = await localMf.dispatchFetch('http://localhost/api/crypto/kms_public_key');
+
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'INTERNAL_ERROR');
+    assert.equal(body.error?.message, 'KMS public key not available: missing KMS_KEY_ID');
+  } finally {
+    await localMf.dispose();
+  }
 });
 
 test('POST /api/thread/message is idempotent with client_message_id', async () => {
