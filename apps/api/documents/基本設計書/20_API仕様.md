@@ -256,6 +256,8 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 - `wrapped_key_alg`: ラップ方式（例: `KMS` / `RSA-OAEP` 等）
 - `wrapped_key_kid`: KEK識別子（例: KMS Key ID/ARN）
 
+上記 `wrapped_key*` 3項目はすべて必須。いずれかが欠けている、または空文字のときは `400 Bad Request` を返す。
+
 **成功レスポンス（例）**:
 ```json
 {
@@ -357,6 +359,29 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 
 補足:
 - 返却は暗号文とメタ情報のみ（平文本文は返却しない）。
+- `wrapped_key`, `wrapped_key_alg`, `wrapped_key_kid` は各メッセージで必ず返る前提とする。
+
+---
+
+### GET /api/crypto/kms_public_key
+
+**目的**: クライアント側で DEK をラップするために、AWS KMS の公開鍵を取得する。  
+**認証**: 不要。  
+**入力**: なし
+
+**成功レスポンス（例）**:
+```json
+{
+  "ok": true,
+  "kid": "arn:aws:kms:ap-southeast-2:555569220922:key/ea3e43d1-bc62-47d5-af00-fc609843a46f",
+  "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkq...\n-----END PUBLIC KEY-----\n"
+}
+```
+
+補足:
+- `kid` は当面 `KMS_KEY_ID` をそのまま返す。
+- `public_key_pem` は Web Crypto で RSA-OAEP ラップに利用できる SPKI PEM 形式とする。
+- API は KMS の `GetPublicKey` を代理実行するが、秘密鍵素材は一切返さない。
 
 ---
 

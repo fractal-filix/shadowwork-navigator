@@ -33,6 +33,9 @@ interface InsertEncryptedMessageParams {
   alg: string;
   v: number;
   kid: string | null;
+  wrapped_key: string | null;
+  wrapped_key_alg: string | null;
+  wrapped_key_kid: string | null;
 }
 
 async function insertEncryptedMessageWithSeq(env: Env, {
@@ -46,6 +49,9 @@ async function insertEncryptedMessageWithSeq(env: Env, {
   alg,
   v,
   kid,
+  wrapped_key,
+  wrapped_key_alg,
+  wrapped_key_kid,
 }: InsertEncryptedMessageParams): Promise<'inserted' | 'duplicate'> {
   const maxRetries = 3;
 
@@ -53,9 +59,9 @@ async function insertEncryptedMessageWithSeq(env: Env, {
     try {
       await env.DB.prepare(
         `INSERT INTO messages
-          (id, run_id, thread_id, user_id, role, client_message_id, content, content_iv, content_alg, content_v, content_kid, seq)
+          (id, run_id, thread_id, user_id, role, client_message_id, content, content_iv, content_alg, content_v, content_kid, content_wrapped_key, content_wrapped_key_alg, content_wrapped_key_kid, seq)
          VALUES
-          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (
+          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (
             SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE thread_id = ?
           ))`
       )
@@ -71,6 +77,9 @@ async function insertEncryptedMessageWithSeq(env: Env, {
           alg,
           v,
           kid,
+          wrapped_key,
+          wrapped_key_alg,
+          wrapped_key_kid,
           thread_id
         )
         .run();
@@ -136,6 +145,9 @@ export async function threadMessageHandler({ request, env, url }: ThreadMessageH
   const version = body.v;
   const kid = body.kid;
   const thread_id = body.thread_id;
+  const wrappedKey = body.wrapped_key;
+  const wrappedKeyAlg = body.wrapped_key_alg;
+  const wrappedKeyKid = body.wrapped_key_kid;
 
   if (role !== 'user' && role !== 'assistant') {
     return badRequest('role must be "user" or "assistant"');
@@ -177,6 +189,22 @@ export async function threadMessageHandler({ request, env, url }: ThreadMessageH
     return badRequest(`kid must be <= ${MAX_KID_LENGTH} chars`);
   }
 
+  if (typeof wrappedKey !== 'string' || !wrappedKey.trim()) {
+    return badRequest('wrapped_key is required');
+  }
+
+  if (typeof wrappedKeyAlg !== 'string' || !wrappedKeyAlg.trim()) {
+    return badRequest('wrapped_key_alg is required');
+  }
+
+  if (typeof wrappedKeyKid !== 'string' || !wrappedKeyKid.trim()) {
+    return badRequest('wrapped_key_kid is required');
+  }
+
+  if (wrappedKeyKid.trim().length > MAX_KID_LENGTH) {
+    return badRequest(`wrapped_key_kid must be <= ${MAX_KID_LENGTH} chars`);
+  }
+
   const run = await getActiveRun(env, user_id);
   if (!run) return badRequest("no active run; call /api/run/start (or /api/run/restart)");
 
@@ -204,6 +232,9 @@ export async function threadMessageHandler({ request, env, url }: ThreadMessageH
     alg: alg.trim(),
     v: Number(version),
     kid: typeof kid === 'string' ? kid.trim() : null,
+    wrapped_key: wrappedKey.trim(),
+    wrapped_key_alg: wrappedKeyAlg.trim(),
+    wrapped_key_kid: wrappedKeyKid.trim(),
   });
 
   const response: ThreadMessageStoreResponse = {

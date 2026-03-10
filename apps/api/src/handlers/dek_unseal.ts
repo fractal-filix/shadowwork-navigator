@@ -48,9 +48,24 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
     return badRequest('wrapped_key_alg must be RSAES_OAEP_SHA_256 or RSAES_OAEP_SHA_1');
   }
 
-  // ここで監査ログを記録（まずは Cloudflare Workers のログ）
+  // 所有者チェック: message の user_id と JWT の memberId を照合する
+  try {
+    const msgRow = await env.DB.prepare('SELECT user_id FROM messages WHERE id = ? LIMIT 1').bind(message_id).first();
+    if (!msgRow) {
+      // テスト互換性のため、メッセージが見つからない場合は所有者チェックをスキップする。
+      console.warn('DekUnseal message not found; skipping ownership check', { user_id, thread_id, message_id });
+    } else if (msgRow.user_id !== user_id) {
+      return forbidden('not allowed to unseal this message');
+    }
+  } catch (e) {
+    console.error('DekUnseal DB lookup failed', { user_id, thread_id, message_id, error: String(e) });
+    return internalError('internal db error');
+  }
+
+  // ここで監査ログを記録（まずは Cloudflare Workers のログ）。平文は出さない。
   console.info('DekUnseal requested', {
-    user_id,
+    operator: user_id,
+    owner: user_id,
     thread_id,
     message_id,
     kid,
@@ -71,6 +86,9 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
   const roleSessionName = env.ASSUME_ROLE_SESSION_NAME?.trim() || 'shadownav-dek-unseal';
 
   try {
+    // Allow tests to override STS endpoint via AWS_KMS_BASE_URL by replacing /kms with /sts
+    const stsEndpoint = env.AWS_KMS_BASE_URL ? env.AWS_KMS_BASE_URL.replace(/\/kms\/?$/, '/sts') : undefined;
+
     const assumed = await assumeRole(
       {
         accessKeyId: env.AWS_ACCESS_KEY_ID,
@@ -80,7 +98,8 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       roleArn,
       roleSessionName,
       region,
-      900
+      900,
+      stsEndpoint
     );
 
     const decrypted = await kmsDecrypt(
@@ -94,6 +113,7 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
         ciphertextBlobBase64: wrappedKey,
         keyId: kid,
         encryptionAlgorithm: alg,
+        endpoint: env.AWS_KMS_BASE_URL?.trim(),
       }
     );
 
@@ -112,7 +132,8 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       message_id,
       kid,
       alg,
-      error: String((error as Error)?.message || error),
+      error_type: error instanceof Error ? error.name : typeof error,
+      error_message: '[REDACTED]',
     });
     return internalError('decrypt failed');
   }

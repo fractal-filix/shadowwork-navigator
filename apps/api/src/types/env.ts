@@ -44,6 +44,8 @@ export type Env = Readonly<{
   AWS_ACCESS_KEY_ID: string;
   AWS_SECRET_ACCESS_KEY: string;
   AWS_SESSION_TOKEN?: string;
+  AWS_KMS_BASE_URL?: string;
+  KMS_KEY_ID: string;
   ASSUME_ROLE_ARN?: string;
   ASSUME_ROLE_SESSION_NAME?: string;
 }>;

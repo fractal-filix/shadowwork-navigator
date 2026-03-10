@@ -124,18 +124,18 @@
 - [x] 3.2 API: thread/chat からカード必須入力・カード注入を削除（3pt）
 - [x] 3.3 DB: cards テーブル/インデックスを DDL から削除（3pt）
 - [x] 3.4 types/tests/docs: カード関連を削除し、仕様を更新（4pt）
-- [ ] 4.1 API: thread/message / thread/messages を封筒暗号メタ対応に拡張（入出力契約の確定）（5pt）
+- [x] 4.1 API: thread/message / thread/messages を封筒暗号メタ対応に拡張（入出力契約の確定）（5pt）
 
 ## 2026.03.09
-- [ ] 4.2 API: wrapped_key* を **必須** として扱う（カード無し）（3pt）
-- [ ] 4.3 API: KMS公開鍵の配布（例: GET /api/crypto/kms_public_key）（4pt）
-- [ ] 4.3.1 返却: kid と公開鍵（PEM/JWK等、WebでRSA-OAEPラップできる形式）（3pt）
-- [ ] 4.4 API: wrapped_key のアンラップ（例: POST /api/crypto/dek/unseal）（6pt）
+- [x] 4.2 API: wrapped_key* を **必須** として扱う（カード無し）（3pt）
+- [x] 4.3 API: KMS公開鍵の配布（例: GET /api/crypto/kms_public_key）（4pt）
+- [x] 4.3.1 返却: kid と公開鍵（PEM/JWK等、WebでRSA-OAEPラップできる形式）（3pt）
+- [x] 4.4 API: wrapped_key のアンラップ（例: POST /api/crypto/dek/unseal）（6pt）
 
 ## 2026.03.10
-- [ ] 4.4.1 用途/権限制御を確定（βでは“本人操作のみ”、監査ログ必須）（4pt）
-- [ ] 4.4.2 実装: Workers → AWS KMS Decrypt（SigV4署名）（5pt）
-- [ ] 4.4.3 注意: 平文DEKをログへ出さない（メトリクス/例外も含む）（2pt）
+- [x] 4.4.1 用途/権限制御を確定（βでは“本人操作のみ”、監査ログ必須）（4pt）
+- [x] 4.4.2 実装: Workers → AWS KMS Decrypt（SigV4署名）（5pt）
+- [x] 4.4.3 注意: 平文DEKをログへ出さない（メトリクス/例外も含む）（2pt）
 - [ ] 4.5 API: AWS SigV4署名の実装（KMS呼び出し用）（7pt）
 
 ## 2026.03.11

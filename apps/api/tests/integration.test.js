@@ -14,6 +14,10 @@ const SUPABASE_KID = 'supabase-test-kid';
 const { privateKey: supabasePrivateKey, publicKey: supabasePublicKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 2048,
 });
+const MOCK_KMS_KEY_ID = 'arn:aws:kms:ap-southeast-2:555569220922:key/test-kms-key';
+const mockKmsPublicKeyDerBase64 = Buffer.from(
+  supabasePublicKey.export({ type: 'spki', format: 'der' })
+).toString('base64');
 const supabasePublicJwk = {
   ...(supabasePublicKey.export({ format: 'jwk' })),
   kid: SUPABASE_KID,
@@ -31,6 +35,7 @@ let stripeCheckoutCreateStatus = 200;
 let openAiResponsesMode = 'ok';
 let openAiResponsesRequestCount = 0;
 let lastOpenAiResponsesRequestJson = null;
+let mockKmsDecryptMode = 'ok';
 
 const MOCK_SESSION_ID = 'cs_test_123';
 const STRIPE_EVENT_ID = 'evt_test_123';
@@ -107,6 +112,11 @@ function createSupabaseAccessToken(memberId, payloadOverrides = {}, headerOverri
   return `${data}.${signature}`;
 }
 
+function formatPemFromBase64(base64Body) {
+  const lines = base64Body.match(/.{1,64}/g) || [];
+  return `-----BEGIN PUBLIC KEY-----\n${lines.join('\n')}\n-----END PUBLIC KEY-----\n`;
+}
+
 function buildEnvBindings() {
   return {
     APP_ENV: 'test',
@@ -130,7 +140,13 @@ function buildEnvBindings() {
     SUPABASE_ISSUER,
     SUPABASE_AUDIENCE,
     ALLOWED_ORIGINS: 'http://localhost:3000',
-    ADMIN_MEMBER_IDS: 'member-admin'
+    ADMIN_MEMBER_IDS: 'member-admin',
+    AWS_REGION: 'ap-southeast-2',
+    AWS_ACCESS_KEY_ID: 'test-aws-access-key',
+    AWS_SECRET_ACCESS_KEY: 'test-aws-secret-key',
+    KMS_KEY_ID: MOCK_KMS_KEY_ID,
+    AWS_KMS_BASE_URL: `${mockBaseUrl}/kms`,
+    ASSUME_ROLE_ARN: 'arn:aws:iam::000000000000:role/test-assume-role',
   };
 }
 
@@ -248,6 +264,25 @@ before(async () => {
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/sts') {
+      // Simple mock of AssumeRole for tests
+      let raw = '';
+      req.on('data', (chunk) => { raw += String(chunk); });
+      req.on('end', () => {
+        const now = new Date();
+        const exp = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+        const accessKey = 'ASIA_TEST_ACCESS_KEY';
+        const secretKey = 'TEST_SECRET_KEY';
+        const sessionToken = 'TEST_SESSION_TOKEN';
+
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">\n  <AssumeRoleResult>\n    <Credentials>\n      <AccessKeyId>${accessKey}</AccessKeyId>\n      <SecretAccessKey>${secretKey}</SecretAccessKey>\n      <SessionToken>${sessionToken}</SessionToken>\n      <Expiration>${exp}</Expiration>\n    </Credentials>\n  </AssumeRoleResult>\n</AssumeRoleResponse>`;
+
+        res.writeHead(200, { 'Content-Type': 'text/xml' });
+        res.end(xml);
+      });
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/responses') {
       let raw = '';
       req.on('data', (chunk) => {
@@ -294,6 +329,57 @@ before(async () => {
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/kms') {
+      const target = req.headers['x-amz-target'];
+
+      if (target === 'TrentService.GetPublicKey') {
+        res.writeHead(200, { 'Content-Type': 'application/x-amz-json-1.1' });
+        res.end(JSON.stringify({
+          KeyId: MOCK_KMS_KEY_ID,
+          KeySpec: 'RSA_2048',
+          KeyUsage: 'ENCRYPT_DECRYPT',
+          EncryptionAlgorithms: ['RSAES_OAEP_SHA_1', 'RSAES_OAEP_SHA_256'],
+          PublicKey: mockKmsPublicKeyDerBase64,
+        }));
+        return;
+      }
+
+      if (target === 'TrentService.Decrypt') {
+        let raw = '';
+        req.on('data', (chunk) => { raw += String(chunk); });
+        req.on('end', () => {
+          try {
+            const payload = JSON.parse(raw || '{}');
+            if (mockKmsDecryptMode === 'sensitive_error') {
+              const leakedDekBase64 = Buffer.from('dek-plaintext').toString('base64');
+              res.writeHead(500, { 'Content-Type': 'application/x-amz-json-1.1' });
+              res.end(JSON.stringify({
+                message: `kms mock failure plaintext=${leakedDekBase64}`,
+                CiphertextBlob: payload.CiphertextBlob,
+                Plaintext: leakedDekBase64,
+              }));
+              return;
+            }
+            // テストでは CiphertextBlob をそのまま受け取り、固定の平文DEKを返す
+            const dekPlaintext = Buffer.from('dek-plaintext').toString('base64');
+            res.writeHead(200, { 'Content-Type': 'application/x-amz-json-1.1' });
+            res.end(JSON.stringify({
+              KeyId: MOCK_KMS_KEY_ID,
+              Plaintext: dekPlaintext,
+            }));
+          } catch (e) {
+            res.writeHead(400, { 'Content-Type': 'application/x-amz-json-1.1' });
+            res.end(JSON.stringify({ message: 'bad request' }));
+          }
+        });
+        return;
+      }
+
+      res.writeHead(400, { 'Content-Type': 'application/x-amz-json-1.1' });
+      res.end(JSON.stringify({ message: 'unsupported x-amz-target' }));
+      return;
+    }
+
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'not found' }));
   });
@@ -316,6 +402,7 @@ beforeEach(async () => {
     openAiResponsesMode = 'ok';
     openAiResponsesRequestCount = 0;
     lastOpenAiResponsesRequestJson = null;
+    mockKmsDecryptMode = 'ok';
     const workerPath = path.resolve('dist', 'worker.js');
 
     mf = new Miniflare({
@@ -1356,6 +1443,9 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
       alg: 'AES-256-GCM',
       v: 1,
       kid: 'k1',
+      wrapped_key: 'wrapped-key-base64',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-1',
     }),
   });
 
@@ -1364,7 +1454,7 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
   assert.equal(saveBody.ok, true);
 
   const raw = await db
-    .prepare('SELECT content, content_iv, content_alg, content_v, content_kid FROM messages WHERE thread_id = ? LIMIT 1')
+    .prepare('SELECT content, content_iv, content_alg, content_v, content_kid, content_wrapped_key, content_wrapped_key_alg, content_wrapped_key_kid FROM messages WHERE thread_id = ? LIMIT 1')
     .bind(threadId)
     .first();
 
@@ -1373,6 +1463,9 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
   assert.equal(raw?.content_alg, 'AES-256-GCM');
   assert.equal(raw?.content_v, 1);
   assert.equal(raw?.content_kid, 'k1');
+  assert.equal(raw?.content_wrapped_key, 'wrapped-key-base64');
+  assert.equal(raw?.content_wrapped_key_alg, 'RSAES_OAEP_SHA_256');
+  assert.equal(raw?.content_wrapped_key_kid, 'kms-key-1');
 
   const listRes = await mf.dispatchFetch(`http://localhost/api/thread/messages?thread_id=${threadId}`, {
     method: 'GET',
@@ -1388,7 +1481,110 @@ test('POST /api/thread/message persists encrypted payload and GET /api/thread/me
   assert.equal(listBody.messages[0].alg, 'AES-256-GCM');
   assert.equal(listBody.messages[0].v, 1);
   assert.equal(listBody.messages[0].kid, 'k1');
+  assert.equal(listBody.messages[0].wrapped_key, 'wrapped-key-base64');
+  assert.equal(listBody.messages[0].wrapped_key_alg, 'RSAES_OAEP_SHA_256');
+  assert.equal(listBody.messages[0].wrapped_key_kid, 'kms-key-1');
   assert.equal(listBody.messages[0].content, undefined);
+});
+
+test('POST /api/thread/message rejects payload without wrapped key fields', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const threadStartBody = await threadStartRes.json();
+  const threadId = threadStartBody.thread?.id;
+  assert.equal(typeof threadId, 'string');
+
+  const basePayload = {
+    thread_id: threadId,
+    role: 'assistant',
+    client_message_id: 'cm-without-wrapped-key',
+    ciphertext: 'cipher-no-wrap',
+    iv: 'iv-no-wrap',
+    alg: 'AES-256-GCM',
+    v: 1,
+    wrapped_key: 'wrapped-key-base64',
+    wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+    wrapped_key_kid: 'kms-key-1',
+  };
+
+  for (const [missingField, expectedMessage] of [
+    ['wrapped_key', 'wrapped_key is required'],
+    ['wrapped_key_alg', 'wrapped_key_alg is required'],
+    ['wrapped_key_kid', 'wrapped_key_kid is required'],
+  ]) {
+    const payload = { ...basePayload };
+    delete payload[missingField];
+
+    const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(MEMBER_ID),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    assert.equal(saveRes.status, 400);
+    const saveBody = await saveRes.json();
+    assert.equal(saveBody.error?.code, 'BAD_REQUEST');
+    assert.equal(saveBody.error?.message, expectedMessage);
+  }
+
+  const raw = await db
+    .prepare('SELECT COUNT(*) AS count FROM messages WHERE thread_id = ?')
+    .bind(threadId)
+    .first();
+
+  assert.equal(raw?.count, 0);
+});
+
+test('GET /api/crypto/kms_public_key returns kid and PEM public key', async () => {
+  const res = await mf.dispatchFetch('http://localhost/api/crypto/kms_public_key');
+
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.kid, MOCK_KMS_KEY_ID);
+  assert.equal(body.public_key_pem, formatPemFromBase64(mockKmsPublicKeyDerBase64));
+});
+
+test('GET /api/crypto/kms_public_key returns standardized internal error when KMS_KEY_ID is missing', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-kms-public-key-missing-key-id' },
+    bindings: {
+      ...buildEnvBindings(),
+      KMS_KEY_ID: '',
+    },
+  });
+
+  try {
+    const res = await localMf.dispatchFetch('http://localhost/api/crypto/kms_public_key');
+
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'INTERNAL_ERROR');
+    assert.equal(body.error?.message, 'KMS public key not available: missing KMS_KEY_ID');
+  } finally {
+    await localMf.dispose();
+  }
 });
 
 test('POST /api/thread/message is idempotent with client_message_id', async () => {
@@ -1420,6 +1616,9 @@ test('POST /api/thread/message is idempotent with client_message_id', async () =
     iv: 'iv-1',
     alg: 'AES-256-GCM',
     v: 1,
+    wrapped_key: 'wrapped-key-1',
+    wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+    wrapped_key_kid: 'kms-key-1',
   };
 
   const first = await mf.dispatchFetch('http://localhost/api/thread/message', {
@@ -1484,6 +1683,9 @@ test('POST /api/thread/message does not reject large ciphertext for cost control
       iv: 'i'.repeat(513),
       alg: 'a'.repeat(65),
       v: 1,
+      wrapped_key: 'wrapped-key-large',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-large',
     }),
   });
 
@@ -1528,6 +1730,9 @@ test('POST /api/thread/message returns 400 when id fields exceed max length', as
       alg: 'AES-256-GCM',
       v: 1,
       kid: 'kid-ok',
+      wrapped_key: 'wrapped-key-ok',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-ok',
     };
     payload[testCase.field] = testCase.value;
 
@@ -1694,6 +1899,9 @@ test('GET /api/thread/state returns encrypted last_message when message exists',
       alg: 'AES-256-GCM',
       v: 1,
       kid: 'k-state-1',
+      wrapped_key: 'wrapped-key-state-1',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-state-1',
     }),
   });
   assert.equal(saveRes.status, 200);
@@ -2024,6 +2232,9 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
       iv: 'main-flow-iv',
       alg: 'AES-256-GCM',
       v: 1,
+      wrapped_key: 'main-flow-wrapped-key',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'main-flow-kms-key',
     }),
   });
 
@@ -2194,5 +2405,123 @@ test('POST /api/admin/set_paid returns standardized internal error when PAID_ADM
     assert.equal(typeof body.error?.message, 'string');
   } finally {
     await localMf.dispose();
+  }
+});
+
+// --------------------------------------------------
+// KMS Unseal (dek_unseal) 統合テスト
+// --------------------------------------------------
+
+test('POST /api/crypto/dek/unseal returns dek_base64 when paid and request valid', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const wrappedKey = Buffer.from('wrapped-by-client').toString('base64');
+
+  const res = await mf.dispatchFetch('http://localhost/api/crypto/dek/unseal', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      wrapped_key: wrappedKey,
+      wrapped_key_kid: MOCK_KMS_KEY_ID,
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      thread_id: 'thread-for-unseal',
+      message_id: 'msg-for-unseal',
+      reason: 'test-unseal',
+    }),
+  });
+
+  if (res.status !== 200) {
+    const txt = await res.text();
+    console.error('dek_unseal response body (non-200):', txt);
+  }
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.wrapped_key_kid, MOCK_KMS_KEY_ID);
+  assert.equal(body.wrapped_key_alg, 'RSAES_OAEP_SHA_256');
+  assert.equal(body.dek_base64, Buffer.from('dek-plaintext').toString('base64'));
+});
+
+test('POST /api/crypto/dek/unseal returns 403 when user is not paid', async () => {
+  // ensure no paid flag exists for MEMBER_ID
+  const res = await mf.dispatchFetch('http://localhost/api/crypto/dek/unseal', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      wrapped_key: Buffer.from('x').toString('base64'),
+      wrapped_key_kid: MOCK_KMS_KEY_ID,
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      thread_id: 't-unpaid',
+      message_id: 'm-unpaid',
+    }),
+  });
+
+  assert.equal(res.status, 403);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'FORBIDDEN');
+});
+
+test('POST /api/crypto/dek/unseal does not log plaintext dek when KMS decrypt fails', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  mockKmsDecryptMode = 'sensitive_error';
+  const wrappedKey = Buffer.from('wrapped-by-client').toString('base64');
+  const leakedDekBase64 = Buffer.from('dek-plaintext').toString('base64');
+  const originalConsoleError = console.error;
+  const capturedLogs = [];
+
+  console.error = (...args) => {
+    capturedLogs.push(args.map((arg) => {
+      if (typeof arg === 'string') return arg;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    }).join(' '));
+  };
+
+  try {
+    const res = await mf.dispatchFetch('http://localhost/api/crypto/dek/unseal', {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(MEMBER_ID),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        wrapped_key: wrappedKey,
+        wrapped_key_kid: MOCK_KMS_KEY_ID,
+        wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+        thread_id: 'thread-sensitive-error',
+        message_id: 'msg-sensitive-error',
+        reason: 'sensitive-error-test',
+      }),
+    });
+
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'INTERNAL_ERROR');
+
+    const combinedLogs = capturedLogs.join('\n');
+    assert.equal(combinedLogs.includes(leakedDekBase64), false);
+    assert.equal(combinedLogs.includes('dek-plaintext'), false);
+    assert.equal(combinedLogs.includes(wrappedKey), false);
+  } finally {
+    console.error = originalConsoleError;
+    mockKmsDecryptMode = 'ok';
   }
 });

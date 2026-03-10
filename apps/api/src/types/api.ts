@@ -92,6 +92,15 @@ export interface AuthExchangeResponse extends SuccessResponse {
     expires_in: number;
 }
 
+/**
+ * KMS 公開鍵取得レスポンス
+ * GET /api/crypto/kms_public_key
+ */
+export interface KmsPublicKeyResponse extends SuccessResponse {
+    kid: string;
+    public_key_pem: string;
+}
+
 // ============================================================================
 // Run / Thread / Message 関連の共通型
 // ============================================================================
@@ -148,6 +157,10 @@ export interface EncryptedMessageDetail {
     alg: string;
     v: number;
     kid?: string | null;
+    wrapped_key?: string | null;
+    wrapped_key_alg?: string | null;
+    wrapped_key_kid?: string | null;
+    key_v?: number | null;
     seq?: number;
     created_at?: string;
 }

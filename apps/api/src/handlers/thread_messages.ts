@@ -80,6 +80,10 @@ export async function threadMessagesHandler({ request, env, url }: ThreadMessage
          content_alg AS alg,
          content_v AS v,
          content_kid AS kid,
+        content_wrapped_key AS wrapped_key,
+        content_wrapped_key_alg AS wrapped_key_alg,
+        content_wrapped_key_kid AS wrapped_key_kid,
+        content_key_v AS key_v,
          seq,
          created_at
        FROM messages
