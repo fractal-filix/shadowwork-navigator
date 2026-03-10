@@ -130,12 +130,12 @@
 - [x] 4.2 API: wrapped_key* を **必須** として扱う（カード無し）（3pt）
 - [x] 4.3 API: KMS公開鍵の配布（例: GET /api/crypto/kms_public_key）（4pt）
 - [x] 4.3.1 返却: kid と公開鍵（PEM/JWK等、WebでRSA-OAEPラップできる形式）（3pt）
-- [ ] 4.4 API: wrapped_key のアンラップ（例: POST /api/crypto/dek/unseal）（6pt）
+- [x] 4.4 API: wrapped_key のアンラップ（例: POST /api/crypto/dek/unseal）（6pt）
 
 ## 2026.03.10
 - [x] 4.4.1 用途/権限制御を確定（βでは“本人操作のみ”、監査ログ必須）（4pt）
 - [x] 4.4.2 実装: Workers → AWS KMS Decrypt（SigV4署名）（5pt）
-- [ ] 4.4.3 注意: 平文DEKをログへ出さない（メトリクス/例外も含む）（2pt）
+- [x] 4.4.3 注意: 平文DEKをログへ出さない（メトリクス/例外も含む）（2pt）
 - [ ] 4.5 API: AWS SigV4署名の実装（KMS呼び出し用）（7pt）
 
 ## 2026.03.11

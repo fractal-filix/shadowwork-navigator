@@ -132,7 +132,8 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       message_id,
       kid,
       alg,
-      error: String((error as Error)?.message || error),
+      error_type: error instanceof Error ? error.name : typeof error,
+      error_message: '[REDACTED]',
     });
     return internalError('decrypt failed');
   }

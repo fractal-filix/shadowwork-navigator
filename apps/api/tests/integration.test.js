@@ -35,6 +35,7 @@ let stripeCheckoutCreateStatus = 200;
 let openAiResponsesMode = 'ok';
 let openAiResponsesRequestCount = 0;
 let lastOpenAiResponsesRequestJson = null;
+let mockKmsDecryptMode = 'ok';
 
 const MOCK_SESSION_ID = 'cs_test_123';
 const STRIPE_EVENT_ID = 'evt_test_123';
@@ -349,6 +350,16 @@ before(async () => {
         req.on('end', () => {
           try {
             const payload = JSON.parse(raw || '{}');
+            if (mockKmsDecryptMode === 'sensitive_error') {
+              const leakedDekBase64 = Buffer.from('dek-plaintext').toString('base64');
+              res.writeHead(500, { 'Content-Type': 'application/x-amz-json-1.1' });
+              res.end(JSON.stringify({
+                message: `kms mock failure plaintext=${leakedDekBase64}`,
+                CiphertextBlob: payload.CiphertextBlob,
+                Plaintext: leakedDekBase64,
+              }));
+              return;
+            }
             // テストでは CiphertextBlob をそのまま受け取り、固定の平文DEKを返す
             const dekPlaintext = Buffer.from('dek-plaintext').toString('base64');
             res.writeHead(200, { 'Content-Type': 'application/x-amz-json-1.1' });
@@ -391,6 +402,7 @@ beforeEach(async () => {
     openAiResponsesMode = 'ok';
     openAiResponsesRequestCount = 0;
     lastOpenAiResponsesRequestJson = null;
+    mockKmsDecryptMode = 'ok';
     const workerPath = path.resolve('dist', 'worker.js');
 
     mf = new Miniflare({
@@ -2457,4 +2469,59 @@ test('POST /api/crypto/dek/unseal returns 403 when user is not paid', async () =
   const body = await res.json();
   assert.equal(body.ok, false);
   assert.equal(body.error?.code, 'FORBIDDEN');
+});
+
+test('POST /api/crypto/dek/unseal does not log plaintext dek when KMS decrypt fails', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  mockKmsDecryptMode = 'sensitive_error';
+  const wrappedKey = Buffer.from('wrapped-by-client').toString('base64');
+  const leakedDekBase64 = Buffer.from('dek-plaintext').toString('base64');
+  const originalConsoleError = console.error;
+  const capturedLogs = [];
+
+  console.error = (...args) => {
+    capturedLogs.push(args.map((arg) => {
+      if (typeof arg === 'string') return arg;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    }).join(' '));
+  };
+
+  try {
+    const res = await mf.dispatchFetch('http://localhost/api/crypto/dek/unseal', {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(MEMBER_ID),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        wrapped_key: wrappedKey,
+        wrapped_key_kid: MOCK_KMS_KEY_ID,
+        wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+        thread_id: 'thread-sensitive-error',
+        message_id: 'msg-sensitive-error',
+        reason: 'sensitive-error-test',
+      }),
+    });
+
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'INTERNAL_ERROR');
+
+    const combinedLogs = capturedLogs.join('\n');
+    assert.equal(combinedLogs.includes(leakedDekBase64), false);
+    assert.equal(combinedLogs.includes('dek-plaintext'), false);
+    assert.equal(combinedLogs.includes(wrappedKey), false);
+  } finally {
+    console.error = originalConsoleError;
+    mockKmsDecryptMode = 'ok';
+  }
 });

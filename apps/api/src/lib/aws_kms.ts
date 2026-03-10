@@ -6,6 +6,8 @@ type AwsCredentials = {
   sessionToken?: string;
 };
 
+const SENSITIVE_AWS_RESPONSE_FIELDS = ['Plaintext', 'CiphertextBlob'];
+
 export type AssumeRoleResult = {
   accessKeyId: string;
   secretAccessKey: string;
@@ -26,6 +28,28 @@ function readXmlTag(xml: string, tagName: string): string | null {
   const match = xml.match(new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`));
   if (!match?.[1]) return null;
   return match[1].trim();
+}
+
+function redactSensitiveAwsFields(value: string): string {
+  return SENSITIVE_AWS_RESPONSE_FIELDS.reduce((currentValue, fieldName) => {
+    const jsonPattern = new RegExp(`("${fieldName}"\\s*:\\s*")([^"]*)(")`, 'gi');
+    const xmlPattern = new RegExp(`(<${fieldName}>)([\\s\\S]*?)(<\\/${fieldName}>)`, 'gi');
+    const assignmentPattern = new RegExp(`(${fieldName}\\s*=\\s*)([^\\s,;]+)`, 'gi');
+
+    return currentValue
+      .replace(jsonPattern, '$1[REDACTED]$3')
+      .replace(xmlPattern, '$1[REDACTED]$3')
+      .replace(assignmentPattern, '$1[REDACTED]');
+  }, value);
+}
+
+function buildAwsServiceError(prefix: string, status: number, responseText?: string): Error {
+  const sanitizedText = responseText ? redactSensitiveAwsFields(responseText) : '';
+  if (!sanitizedText) {
+    return new Error(`${prefix} (${status})`);
+  }
+
+  return new Error(`${prefix} (${status}): ${sanitizedText}`);
 }
 
 async function signedFetch(
@@ -89,7 +113,7 @@ export async function assumeRole(
 
   const xml = await response.text();
   if (!response.ok) {
-    throw new Error(`AssumeRole failed (${response.status}): ${xml}`);
+    throw buildAwsServiceError('AssumeRole failed', response.status, xml);
   }
 
   const accessKeyId = readXmlTag(xml, 'AccessKeyId');
@@ -141,7 +165,7 @@ export async function kmsDecrypt(
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`KMS Decrypt failed (${response.status}): ${text}`);
+    throw buildAwsServiceError('KMS Decrypt failed', response.status, text);
   }
 
   const data = JSON.parse(text) as { Plaintext?: string; KeyId?: string };
@@ -181,7 +205,7 @@ export async function kmsGetPublicKey(
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`KMS GetPublicKey failed (${response.status}): ${text}`);
+    throw buildAwsServiceError('KMS GetPublicKey failed', response.status, text);
   }
 
   const data = JSON.parse(text) as {
