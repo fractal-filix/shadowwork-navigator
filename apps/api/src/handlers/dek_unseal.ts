@@ -71,6 +71,9 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
   const roleSessionName = env.ASSUME_ROLE_SESSION_NAME?.trim() || 'shadownav-dek-unseal';
 
   try {
+    // Allow tests to override STS endpoint via AWS_KMS_BASE_URL by replacing /kms with /sts
+    const stsEndpoint = env.AWS_KMS_BASE_URL ? env.AWS_KMS_BASE_URL.replace(/\/kms\/?$/, '/sts') : undefined;
+
     const assumed = await assumeRole(
       {
         accessKeyId: env.AWS_ACCESS_KEY_ID,
@@ -80,7 +83,8 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       roleArn,
       roleSessionName,
       region,
-      900
+      900,
+      stsEndpoint
     );
 
     const decrypted = await kmsDecrypt(
@@ -94,6 +98,7 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
         ciphertextBlobBase64: wrappedKey,
         keyId: kid,
         encryptionAlgorithm: alg,
+        endpoint: env.AWS_KMS_BASE_URL?.trim(),
       }
     );
 

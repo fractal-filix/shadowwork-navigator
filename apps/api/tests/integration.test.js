@@ -145,6 +145,7 @@ function buildEnvBindings() {
     AWS_SECRET_ACCESS_KEY: 'test-aws-secret-key',
     KMS_KEY_ID: MOCK_KMS_KEY_ID,
     AWS_KMS_BASE_URL: `${mockBaseUrl}/kms`,
+    ASSUME_ROLE_ARN: 'arn:aws:iam::000000000000:role/test-assume-role',
   };
 }
 
@@ -262,6 +263,25 @@ before(async () => {
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/sts') {
+      // Simple mock of AssumeRole for tests
+      let raw = '';
+      req.on('data', (chunk) => { raw += String(chunk); });
+      req.on('end', () => {
+        const now = new Date();
+        const exp = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+        const accessKey = 'ASIA_TEST_ACCESS_KEY';
+        const secretKey = 'TEST_SECRET_KEY';
+        const sessionToken = 'TEST_SESSION_TOKEN';
+
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">\n  <AssumeRoleResult>\n    <Credentials>\n      <AccessKeyId>${accessKey}</AccessKeyId>\n      <SecretAccessKey>${secretKey}</SecretAccessKey>\n      <SessionToken>${sessionToken}</SessionToken>\n      <Expiration>${exp}</Expiration>\n    </Credentials>\n  </AssumeRoleResult>\n</AssumeRoleResponse>`;
+
+        res.writeHead(200, { 'Content-Type': 'text/xml' });
+        res.end(xml);
+      });
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/responses') {
       let raw = '';
       req.on('data', (chunk) => {
@@ -320,6 +340,27 @@ before(async () => {
           EncryptionAlgorithms: ['RSAES_OAEP_SHA_1', 'RSAES_OAEP_SHA_256'],
           PublicKey: mockKmsPublicKeyDerBase64,
         }));
+        return;
+      }
+
+      if (target === 'TrentService.Decrypt') {
+        let raw = '';
+        req.on('data', (chunk) => { raw += String(chunk); });
+        req.on('end', () => {
+          try {
+            const payload = JSON.parse(raw || '{}');
+            // テストでは CiphertextBlob をそのまま受け取り、固定の平文DEKを返す
+            const dekPlaintext = Buffer.from('dek-plaintext').toString('base64');
+            res.writeHead(200, { 'Content-Type': 'application/x-amz-json-1.1' });
+            res.end(JSON.stringify({
+              KeyId: MOCK_KMS_KEY_ID,
+              Plaintext: dekPlaintext,
+            }));
+          } catch (e) {
+            res.writeHead(400, { 'Content-Type': 'application/x-amz-json-1.1' });
+            res.end(JSON.stringify({ message: 'bad request' }));
+          }
+        });
         return;
       }
 
@@ -2353,4 +2394,67 @@ test('POST /api/admin/set_paid returns standardized internal error when PAID_ADM
   } finally {
     await localMf.dispose();
   }
+});
+
+// --------------------------------------------------
+// KMS Unseal (dek_unseal) 統合テスト
+// --------------------------------------------------
+
+test('POST /api/crypto/dek/unseal returns dek_base64 when paid and request valid', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const wrappedKey = Buffer.from('wrapped-by-client').toString('base64');
+
+  const res = await mf.dispatchFetch('http://localhost/api/crypto/dek/unseal', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      wrapped_key: wrappedKey,
+      wrapped_key_kid: MOCK_KMS_KEY_ID,
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      thread_id: 'thread-for-unseal',
+      message_id: 'msg-for-unseal',
+      reason: 'test-unseal',
+    }),
+  });
+
+  if (res.status !== 200) {
+    const txt = await res.text();
+    console.error('dek_unseal response body (non-200):', txt);
+  }
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.wrapped_key_kid, MOCK_KMS_KEY_ID);
+  assert.equal(body.wrapped_key_alg, 'RSAES_OAEP_SHA_256');
+  assert.equal(body.dek_base64, Buffer.from('dek-plaintext').toString('base64'));
+});
+
+test('POST /api/crypto/dek/unseal returns 403 when user is not paid', async () => {
+  // ensure no paid flag exists for MEMBER_ID
+  const res = await mf.dispatchFetch('http://localhost/api/crypto/dek/unseal', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      wrapped_key: Buffer.from('x').toString('base64'),
+      wrapped_key_kid: MOCK_KMS_KEY_ID,
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      thread_id: 't-unpaid',
+      message_id: 'm-unpaid',
+    }),
+  });
+
+  assert.equal(res.status, 403);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'FORBIDDEN');
 });

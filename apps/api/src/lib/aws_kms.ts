@@ -59,7 +59,8 @@ export async function assumeRole(
   roleArn: string,
   roleSessionName: string,
   region: string,
-  durationSeconds = 900
+  durationSeconds = 900,
+  endpoint?: string
 ): Promise<AssumeRoleResult> {
   const safeRoleArn = escapeXml(roleArn);
   const safeSessionName = escapeXml(roleSessionName);
@@ -71,7 +72,9 @@ export async function assumeRole(
     DurationSeconds: String(durationSeconds),
   });
 
-  const url = `https://sts.${region}.amazonaws.com/?${query.toString()}`;
+  const url = endpoint?.trim()
+    ? `${endpoint.replace(/\/$/, '')}?${query.toString()}`
+    : `https://sts.${region}.amazonaws.com/?${query.toString()}`;
   const response = await signedFetch(
     url,
     'POST',
@@ -113,9 +116,10 @@ export async function kmsDecrypt(
     ciphertextBlobBase64: string;
     keyId?: string;
     encryptionAlgorithm?: string;
+    endpoint?: string;
   }
 ): Promise<{ plaintextBase64: string; keyId?: string }> {
-  const url = `https://kms.${region}.amazonaws.com/`;
+  const url = params.endpoint?.trim() || `https://kms.${region}.amazonaws.com/`;
   const body = JSON.stringify({
     CiphertextBlob: params.ciphertextBlobBase64,
     ...(params.keyId ? { KeyId: params.keyId } : {}),
