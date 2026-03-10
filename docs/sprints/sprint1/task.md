@@ -134,7 +134,7 @@
 
 ## 2026.03.10
 - [ ] 4.4.1 用途/権限制御を確定（βでは“本人操作のみ”、監査ログ必須）（4pt）
-- [ ] 4.4.2 実装: Workers → AWS KMS Decrypt（SigV4署名）（5pt）
+- [x] 4.4.2 実装: Workers → AWS KMS Decrypt（SigV4署名）（5pt）
 - [ ] 4.4.3 注意: 平文DEKをログへ出さない（メトリクス/例外も含む）（2pt）
 - [ ] 4.5 API: AWS SigV4署名の実装（KMS呼び出し用）（7pt）
 
