@@ -22,6 +22,7 @@
 
   <script type="module">
     import { API_BASE, apiPaid, getSupabaseUser } from "/lib/client.js";
+    import { decryptThreadMessages } from "/lib/thread_messages.js";
     const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
     const $log = document.getElementById("log");
@@ -113,7 +114,11 @@
       const t = window.__STATE__?.thread;
       if (!t?.id) return;
       const msgData = await apiThreadMessages(t.id);
-      renderThreadMessagesToLog(msgData.messages || []);
+      const decrypted = await decryptThreadMessages(msgData.messages || [], {
+        apiBase: API_BASE,
+        threadId: t.id,
+      });
+      renderThreadMessagesToLog(decrypted);
     }
 
     async function ensureThread() {
