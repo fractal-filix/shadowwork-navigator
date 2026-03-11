@@ -141,7 +141,12 @@
 
 ## 2026.03.11
 - [x] 4.6 運用: Decrypt（アンラップ）操作の監査メタを記録（操作者、理由、timestamp、対象thread/message等）（4pt）
-- [ ] 4.7 D1: database/DDL.sql の封筒暗号メタカラムを適用（ローカル/ステージング）（3pt）
+- [x] 4.7 D1: database/DDL.sql の封筒暗号メタカラムを適用（ローカル/ステージング）（3pt）
+	- 実施（local）: `pwsh -File scripts/recreate-d1.ps1 -DatabaseName filix_shadowwork_dev -Binding DB -DeleteExisting`
+	- 実施（staging）: `pnpm exec wrangler d1 execute filix_shadowwork_stg --env staging --remote --file database/DDL.sql`
+	- 実施（production）: `pnpm exec wrangler d1 execute filix_shadowwork_prod --env production --remote --file database/DDL.sql`
+	- 検証（local/staging/production）: `PRAGMA table_info(messages);` で `content_wrapped_key`, `content_wrapped_key_alg`, `content_wrapped_key_kid`, `content_key_v` を確認し、`SELECT name FROM sqlite_master WHERE type='table' AND name IN ('messages','decrypt_audit_logs') ORDER BY name;` で `decrypt_audit_logs` を確認
+	- 補足: staging の破壊的再作成は `wrangler d1 delete ... --env staging` が `fetch failed` で不安定だったため、pre-release 前提で DDL 再適用に切り替えて反映
 - [ ] 5.1 Web: 暗号化（AES-GCM等）/復号実装（6pt）
 - [ ] 5.2 Web: thread/messages の暗号文を復号して表示（平文前提の実装を修正）（4pt）
 
