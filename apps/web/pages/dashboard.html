@@ -241,6 +241,7 @@
       apiPaid,
       getSupabaseUser
     } from "/lib/client.js";
+    import { decryptThreadMessages } from "/lib/thread_messages.js";
 
     async function getMemberAnyVersion() {
       try {
@@ -586,7 +587,11 @@
               const msgData = await apiThreadMessages(t.id);
               const threadLabel = formatThreadLabel(msgData?.thread || t);
               messagesHeader.textContent = `${threadLabel} / thread_id=${t.id}`;
-              renderMessages(msgData?.messages ?? []);
+              const decrypted = await decryptThreadMessages(msgData?.messages ?? [], {
+                apiBase: API_BASE,
+                threadId: t.id,
+              });
+              renderMessages(decrypted);
 
               historyStatus.textContent = "";
             } catch (e) {
