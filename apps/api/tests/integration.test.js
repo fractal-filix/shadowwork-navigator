@@ -2497,6 +2497,20 @@ test('POST /api/crypto/dek/unseal returns dek_base64 when paid and request valid
   assert.equal(body.wrapped_key_alg, 'RSAES_OAEP_SHA_256');
   assert.equal(body.dek_base64, Buffer.from('dek-plaintext').toString('base64'));
 
+  const auditRow = await db
+    .prepare('SELECT operator_user_id, target_user_id, thread_id, message_id, wrapped_key_kid, wrapped_key_alg, reason, outcome, error_code FROM decrypt_audit_logs ORDER BY created_at DESC LIMIT 1')
+    .first();
+
+  assert.equal(auditRow?.operator_user_id, MEMBER_ID);
+  assert.equal(auditRow?.target_user_id, MEMBER_ID);
+  assert.equal(auditRow?.thread_id, 'thread-for-unseal');
+  assert.equal(auditRow?.message_id, 'msg-for-unseal');
+  assert.equal(auditRow?.wrapped_key_kid, MOCK_KMS_KEY_ID);
+  assert.equal(auditRow?.wrapped_key_alg, 'RSAES_OAEP_SHA_256');
+  assert.equal(auditRow?.reason, 'test-unseal');
+  assert.equal(auditRow?.outcome, 'success');
+  assert.equal(auditRow?.error_code, null);
+
   const stsRequest = mockAwsRequests.find((entry) => entry.path === '/sts');
   assert.ok(stsRequest);
   assert.match(stsRequest.headers.authorization, /^AWS4-HMAC-SHA256 /);

@@ -123,6 +123,27 @@ export interface CreateMessageInput {
 }
 
 // ============================================================================
+// Decrypt Audit Logs テーブル
+// ============================================================================
+
+/**
+ * Decrypt Audit Logs テーブルの行型
+ */
+export interface DecryptAuditLogRow {
+  id: number;
+  operator_user_id: string;
+  target_user_id: string;
+  thread_id: string;
+  message_id: string;
+  wrapped_key_kid: string;
+  wrapped_key_alg: string;
+  reason: string | null;
+  outcome: 'success' | 'failed';
+  error_code: string | null;
+  created_at: string;
+}
+
+// ============================================================================
 // User Flags テーブル
 // ============================================================================
 
