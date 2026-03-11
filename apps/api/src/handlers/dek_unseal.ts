@@ -13,6 +13,51 @@ interface DekUnsealRequestBody {
   reason?: unknown;
 }
 
+async function insertDecryptAuditLog(
+  env: Env,
+  params: {
+    operatorUserId: string;
+    targetUserId: string;
+    threadId: string;
+    messageId: string;
+    wrappedKeyKid: string;
+    wrappedKeyAlg: string;
+    reason: string;
+    outcome: 'success' | 'failed';
+    errorCode?: string;
+  }
+): Promise<void> {
+  const reasonValue = params.reason ? params.reason : null;
+  const errorCodeValue = params.errorCode ? params.errorCode : null;
+
+  await env.DB
+    .prepare(
+      `INSERT INTO decrypt_audit_logs (
+        operator_user_id,
+        target_user_id,
+        thread_id,
+        message_id,
+        wrapped_key_kid,
+        wrapped_key_alg,
+        reason,
+        outcome,
+        error_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      params.operatorUserId,
+      params.targetUserId,
+      params.threadId,
+      params.messageId,
+      params.wrappedKeyKid,
+      params.wrappedKeyAlg,
+      reasonValue,
+      params.outcome,
+      errorCodeValue
+    )
+    .run();
+}
+
 export async function dekUnsealHandler({ request, env }: { request: Request; env: Env }): Promise<Response> {
   if (request.method !== 'POST') return methodNotAllowed();
 
@@ -49,6 +94,7 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
   }
 
   // 所有者チェック: message の user_id と JWT の memberId を照合する
+  let targetUserId = user_id;
   try {
     const msgRow = await env.DB.prepare('SELECT user_id FROM messages WHERE id = ? LIMIT 1').bind(message_id).first();
     if (!msgRow) {
@@ -56,6 +102,8 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       console.warn('DekUnseal message not found; skipping ownership check', { user_id, thread_id, message_id });
     } else if (msgRow.user_id !== user_id) {
       return forbidden('not allowed to unseal this message');
+    } else {
+      targetUserId = msgRow.user_id;
     }
   } catch (e) {
     console.error('DekUnseal DB lookup failed', { user_id, thread_id, message_id, error: String(e) });
@@ -117,6 +165,17 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       }
     );
 
+    await insertDecryptAuditLog(env, {
+      operatorUserId: user_id,
+      targetUserId,
+      threadId: thread_id,
+      messageId: message_id,
+      wrappedKeyKid: kid,
+      wrappedKeyAlg: alg,
+      reason,
+      outcome: 'success',
+    });
+
     return json({
       ok: true,
       thread_id,
@@ -126,6 +185,27 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       dek_base64: decrypted.plaintextBase64,
     });
   } catch (error) {
+    try {
+      await insertDecryptAuditLog(env, {
+        operatorUserId: user_id,
+        targetUserId,
+        threadId: thread_id,
+        messageId: message_id,
+        wrappedKeyKid: kid,
+        wrappedKeyAlg: alg,
+        reason,
+        outcome: 'failed',
+        errorCode: 'decrypt_failed',
+      });
+    } catch (auditError) {
+      console.error('DekUnseal audit log insert failed', {
+        user_id,
+        thread_id,
+        message_id,
+        audit_error_type: auditError instanceof Error ? auditError.name : typeof auditError,
+      });
+    }
+
     console.error('DekUnseal failed', {
       user_id,
       thread_id,

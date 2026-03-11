@@ -169,6 +169,39 @@ CREATE INDEX IF NOT EXISTS idx_messages_thread_created
     ON messages(thread_id, created_at);
 
 -- =========================
+-- Decrypt audit logs (dek_unseal operation metadata)
+-- =========================
+CREATE TABLE IF NOT EXISTS decrypt_audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    operator_user_id TEXT NOT NULL,
+    target_user_id   TEXT NOT NULL,
+
+    thread_id  TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+
+    wrapped_key_kid TEXT NOT NULL,
+    wrapped_key_alg TEXT NOT NULL,
+    reason TEXT,
+
+    outcome TEXT NOT NULL,
+    error_code TEXT,
+
+    created_at TEXT NOT NULL DEFAULT (DATETIME('now')),
+
+    CHECK (outcome IN ('success', 'failed'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_decrypt_audit_logs_operator_created
+    ON decrypt_audit_logs(operator_user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_decrypt_audit_logs_target_created
+    ON decrypt_audit_logs(target_user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_decrypt_audit_logs_message_created
+    ON decrypt_audit_logs(message_id, created_at);
+
+-- =========================
 -- Remove legacy cards schema
 -- =========================
 DROP INDEX IF EXISTS idx_cards_thread_kind;
