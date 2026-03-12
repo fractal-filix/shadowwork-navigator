@@ -157,9 +157,10 @@
 - [x] 6.3 Web: /api/paid の反映、未paid時の導線（purchaseへ誘導）（2pt）
 
 ## 2026.03.13
-- [-] 7.1 Qdrant: 環境（Qdrant Cloud等）を確定、APIキー/TLSで接続（3pt）
+- [x] 7.1 Qdrant: 環境（Qdrant Cloud等）を確定、APIキー/TLSで接続（3pt）
 	- runbook: `docs/sprints/sprint1/runbook_20260313.md`
-	- 実装: `apps/api/scripts/verify-qdrant.mjs` / `pnpm run verify:qdrant` を追加（実環境値投入で確認可能）
+	- 実装: `apps/api/scripts/verify-qdrant.mjs` / `pnpm run verify:qdrant` を追加
+	- 実施結果: `Qdrant connectivity check: OK` / `tls: https` / `collections: 2` を確認（endpointは秘匿）
 - [ ] 7.2 API: Qdrantクライアント実装（upsert/searchの最小）（5pt）
 - [ ] 7.3 API: env追加（QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION等）（2pt）
 - [ ] 8.1 Web→API: チャンクのアップサートAPI追加（例: POST /api/rag/chunks）（4pt）
