@@ -33,6 +33,11 @@ export type Env = Readonly<{
   SUPABASE_AUDIENCE: string;
   EXTERNAL_API_TIMEOUT_MS?: string;
 
+  // Qdrant
+  QDRANT_URL: string;
+  QDRANT_API_KEY: string;
+  QDRANT_COLLECTION: string;
+
   // CORS
   ALLOWED_ORIGINS: string;
 
