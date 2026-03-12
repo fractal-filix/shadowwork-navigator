@@ -309,6 +309,17 @@ export interface CheckoutSessionCreateResponse extends SuccessResponse {
  */
 export interface StripeWebhookResponse extends SuccessResponse {}
 
+/**
+ * RAG チャンクアップサート受付レスポンス
+ * POST /api/rag/chunks
+ */
+export interface RagChunkUpsertResponse extends SuccessResponse {
+    thread_id: string;
+    message_id: string;
+    chunk_count: number;
+    status: 'accepted';
+}
+
 // ============================================================================
 // ユニオン型（型ガード用）
 // ============================================================================
@@ -334,7 +345,8 @@ export type ApiResponse =
     | LlmPingResponse
     | LlmRespondResponse
     | CheckoutSessionCreateResponse
-    | StripeWebhookResponse;
+    | StripeWebhookResponse
+    | RagChunkUpsertResponse;
 
 // ============================================================================
 // 型ガード
