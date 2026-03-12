@@ -162,7 +162,9 @@
 	- 実装: `apps/api/scripts/verify-qdrant.mjs` / `pnpm run verify:qdrant` を追加
 	- 実施結果: `Qdrant connectivity check: OK` / `tls: https` / `collections: 2` を確認（endpointは秘匿）
 - [x] 7.2 API: Qdrantクライアント実装（upsert/searchの最小）（5pt）
-- [ ] 7.3 API: env追加（QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION等）（2pt）
+- [x] 7.3 API: env追加（QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION等）（2pt）
+	- 反映: `apps/api/src/types/env.ts`（Qdrant env型）
+	- 運用追記: `apps/api/wrangler.toml`（環境ごとの Qdrant vars 管理コメント）, `apps/api/README.md`（必須 Vars/Secrets に Qdrant を追記）
 - [ ] 8.1 Web→API: チャンクのアップサートAPI追加（例: POST /api/rag/chunks）（4pt）
 - [ ] 8.2 API: embedding生成（OpenAI embeddings等）→ Qdrant upsert（5pt）
 
