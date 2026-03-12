@@ -25,6 +25,10 @@ export function createPurchasePageController({ elements, deps, navigate }) {
     toDashboardBtn.disabled = true;
   }
 
+  function setPaidUiState(isPaid) {
+    toDashboardBtn.disabled = !isPaid;
+  }
+
   async function boot() {
     setStatus("status: checking login...", "muted");
     goCheckoutBtn.disabled = true;
@@ -50,7 +54,7 @@ export function createPurchasePageController({ elements, deps, navigate }) {
     loginRow.style.display = "none";
     goCheckoutBtn.disabled = false;
     checkPaidBtn.disabled = false;
-    toDashboardBtn.disabled = false;
+    setPaidUiState(false);
 
     setStatus("status: checking paid...", "muted");
     const paidResult = await deps.apiPaid();
@@ -59,11 +63,13 @@ export function createPurchasePageController({ elements, deps, navigate }) {
       return;
     }
     if (paidResult.data?.paid === true) {
+      setPaidUiState(true);
       setStatus("status: 支払い済みです。Dashboardへ移動します。", "ok");
       moveTo("/dashboard.html");
       return;
     }
 
+    setPaidUiState(false);
     setStatus("status: 未払いです。決済を完了してください。", "ng");
   }
 
@@ -89,9 +95,11 @@ export function createPurchasePageController({ elements, deps, navigate }) {
         return;
       }
       if (paidResult.data?.paid === true) {
+        setPaidUiState(true);
         setStatus("status: 支払い確認OK。Dashboardへ移動します。", "ok");
         moveTo("/dashboard.html");
       } else {
+        setPaidUiState(false);
         setStatus("status: 未払いです。決済を完了してください。", "ng");
       }
     } finally {
