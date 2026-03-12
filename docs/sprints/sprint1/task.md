@@ -152,7 +152,7 @@
 
 ## 2026.03.12
 - [x] 5.3 Web: 送信フロー整理（thread/chat → thread/message に暗号化保存）（5pt）
-- [ ] 6.1 Web: purchaseページをSupabaseログイン前提に更新（3pt）
+- [x] 6.1 Web: purchaseページをSupabaseログイン前提に更新（3pt）
 - [ ] 6.2 API: Checkout Session作成をJWTのsubで確実に紐付け（3pt）
 - [ ] 6.3 Web: /api/paid の反映、未paid時の導線（purchaseへ誘導）（2pt）
 
