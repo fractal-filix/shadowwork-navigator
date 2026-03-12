@@ -4,16 +4,6 @@ import { errorResponse, json, unauthorized } from "../lib/http.js";
 import { authenticateRequest } from '../lib/auth.js';
 import { fetchExternalApi } from '../lib/external_api.js';
 
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
-  const ct = request.headers.get("content-type") || "";
-  if (!ct.includes("application/json")) return null;
-  try {
-    return await request.json() as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
 interface CheckoutSessionCreateContext {
   request: Request;
   env: Env;
@@ -26,8 +16,11 @@ export async function checkoutSessionCreateHandler({ request, env }: CheckoutSes
     return unauthorized('Invalid or missing JWT');
   }
 
-  // memberId は authContext から取得
-  const memberId = authContext.memberId;
+  // 紐付け元はJWT subのみ。空文字/空白は拒否する。
+  const memberId = typeof authContext.memberId === 'string' ? authContext.memberId.trim() : '';
+  if (!memberId) {
+    return unauthorized('Invalid or missing JWT');
+  }
 
   // 必要な env
   // - STRIPE_SECRET_KEY: sk_...

@@ -762,6 +762,42 @@ test('POST /api/checkout/session returns standardized unauthorized error without
   assert.equal(typeof body.error?.message, 'string');
 });
 
+test('POST /api/checkout/session rejects JWT when sub is empty string', async () => {
+  const token = createJwtToken('ignored-member', { sub: '' });
+  const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
+
+  assert.equal(res.status, 401);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'UNAUTHORIZED');
+  assert.equal(typeof body.error?.message, 'string');
+});
+
+test('POST /api/checkout/session rejects JWT when sub is blank spaces', async () => {
+  const token = createJwtToken('ignored-member', { sub: '   ' });
+  const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
+
+  assert.equal(res.status, 401);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'UNAUTHORIZED');
+  assert.equal(typeof body.error?.message, 'string');
+});
+
 test('GET /api/paid rejects test header without JWT cookie', async () => {
   const res = await mf.dispatchFetch('http://localhost/api/paid', {
     headers: {
@@ -817,6 +853,25 @@ test('POST /api/checkout/session creates payment checkout session with client_re
   assert.equal(params.get('client_reference_id'), memberId);
   assert.equal(params.get('line_items[0][price]'), 'price_test');
   assert.equal(params.get('line_items[0][quantity]'), '1');
+});
+
+test('POST /api/checkout/session binds client_reference_id to JWT sub even when body has user_id', async () => {
+  const memberId = 'jwt-sub-user';
+  const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(memberId),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user_id: 'tampered-user-id' }),
+  });
+
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+
+  const params = new URLSearchParams(lastCheckoutBody);
+  assert.equal(params.get('client_reference_id'), memberId);
 });
 
 test('POST /api/checkout/session returns standardized internal error for invalid checkout mode', async () => {
