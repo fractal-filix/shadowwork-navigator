@@ -46,6 +46,17 @@ test('normalizeQdrantBaseUrl rejects non-TLS endpoints', () => {
   );
 });
 
+test('normalizeQdrantBaseUrl allows localhost HTTP only in test env', () => {
+  assert.equal(
+    qdrantModule.normalizeQdrantBaseUrl('http://127.0.0.1:8787/', 'test'),
+    'http://127.0.0.1:8787',
+  );
+  assert.throws(
+    () => qdrantModule.normalizeQdrantBaseUrl('http://qdrant.example.com', 'test'),
+    /QDRANT_URL must use https:\/\//,
+  );
+});
+
 test('qdrantUpsert sends points to the collection endpoint', async () => {
   let capturedUrl = '';
   let capturedInit = null;

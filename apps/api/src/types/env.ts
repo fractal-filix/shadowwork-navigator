@@ -8,6 +8,7 @@ export type Env = Readonly<{
 
   OPENAI_API_KEY: string;
   OPENAI_API_BASE_URL?: string;
+  OPENAI_EMBEDDING_MODEL?: string;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
   STRIPE_API_BASE_URL?: string;

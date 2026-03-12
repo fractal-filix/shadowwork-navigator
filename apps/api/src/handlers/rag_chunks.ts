@@ -1,8 +1,10 @@
 import type { Env } from '../types/env.js';
 import type { RagChunkUpsertResponse } from '../types/api.js';
-import { json, badRequest, methodNotAllowed, unauthorized, forbidden } from '../lib/http.js';
+import { json, badRequest, methodNotAllowed, unauthorized, forbidden, errorResponse } from '../lib/http.js';
 import { authenticateRequest } from '../lib/auth.js';
 import { getUserPaidFlag } from '../lib/paid.js';
+import { createEmbeddings } from '../lib/embeddings.js';
+import { qdrantUpsert } from '../lib/qdrant.js';
 
 const MAX_ID_LENGTH = 128;
 const MAX_CHUNKS = 64;
@@ -134,6 +136,35 @@ export async function ragChunksUpsertHandler({ request, env, url }: RagChunksHan
     }
   }
 
+  let vectors: number[][];
+  try {
+    vectors = await createEmbeddings(
+      env,
+      normalizedChunks.map((chunk) => chunk.text),
+    );
+  } catch {
+    return errorResponse('INTERNAL_ERROR', 'Embedding generation failed', 502);
+  }
+
+  try {
+    await qdrantUpsert(
+      env,
+      normalizedChunks.map((chunk, index) => ({
+        id: `${targetMessageId}#${chunk.chunk_no}`,
+        vector: vectors[index],
+        payload: {
+          user_id: userId,
+          thread_id: threadId,
+          message_id: targetMessageId,
+          chunk_no: chunk.chunk_no,
+          text: chunk.text,
+        },
+      })),
+    );
+  } catch {
+    return errorResponse('INTERNAL_ERROR', 'Qdrant upsert failed', 502);
+  }
+
   const response: RagChunkUpsertResponse = {
     ok: true,
     thread_id: threadId,
@@ -141,7 +172,5 @@ export async function ragChunksUpsertHandler({ request, env, url }: RagChunksHan
     chunk_count: normalizedChunks.length,
     status: 'accepted',
   };
-
-  // 8.1 では API 契約と入力検証を先行し、embedding 生成/Qdrant upsert は 8.2 で実装する。
   return json(response);
 }
