@@ -161,7 +161,7 @@
 	- runbook: `docs/sprints/sprint1/runbook_20260313.md`
 	- 実装: `apps/api/scripts/verify-qdrant.mjs` / `pnpm run verify:qdrant` を追加
 	- 実施結果: `Qdrant connectivity check: OK` / `tls: https` / `collections: 2` を確認（endpointは秘匿）
-- [ ] 7.2 API: Qdrantクライアント実装（upsert/searchの最小）（5pt）
+- [x] 7.2 API: Qdrantクライアント実装（upsert/searchの最小）（5pt）
 - [ ] 7.3 API: env追加（QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION等）（2pt）
 - [ ] 8.1 Web→API: チャンクのアップサートAPI追加（例: POST /api/rag/chunks）（4pt）
 - [ ] 8.2 API: embedding生成（OpenAI embeddings等）→ Qdrant upsert（5pt）
