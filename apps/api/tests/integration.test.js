@@ -1649,6 +1649,166 @@ test('POST /api/thread/message rejects payload without wrapped key fields', asyn
   assert.equal(raw?.count, 0);
 });
 
+test('POST /api/rag/chunks requires paid user', async () => {
+  const res = await mf.dispatchFetch('http://localhost/api/rag/chunks', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: 'thread-1',
+      message_id: 'msg-1',
+      chunks: [{ chunk_no: 0, text: 'first chunk' }],
+    }),
+  });
+
+  assert.equal(res.status, 403);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'FORBIDDEN');
+});
+
+test('POST /api/rag/chunks accepts chunks for an owned message', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const threadStartBody = await threadStartRes.json();
+  const threadId = threadStartBody.thread?.id;
+  assert.equal(typeof threadId, 'string');
+
+  const clientMessageId = 'cm-rag-upsert-1';
+  const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      role: 'user',
+      client_message_id: clientMessageId,
+      ciphertext: 'cipher-text-base64',
+      iv: 'iv-base64',
+      alg: 'AES-256-GCM',
+      v: 1,
+      wrapped_key: 'wrapped-key-base64',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-1',
+    }),
+  });
+  assert.equal(saveRes.status, 200);
+
+  const messageRow = await db
+    .prepare('SELECT id FROM messages WHERE thread_id = ? AND user_id = ? AND client_message_id = ? LIMIT 1')
+    .bind(threadId, MEMBER_ID, clientMessageId)
+    .first();
+  const messageId = messageRow?.id;
+  assert.equal(typeof messageId, 'string');
+
+  const ragRes = await mf.dispatchFetch('http://localhost/api/rag/chunks', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      message_id: messageId,
+      chunks: [
+        { chunk_no: 0, text: '最初のチャンク' },
+        { chunk_no: 1, text: '二つ目のチャンク' },
+      ],
+    }),
+  });
+
+  assert.equal(ragRes.status, 200);
+  const ragBody = await ragRes.json();
+  assert.equal(ragBody.ok, true);
+  assert.equal(ragBody.thread_id, threadId);
+  assert.equal(ragBody.message_id, messageId);
+  assert.equal(ragBody.chunk_count, 2);
+  assert.equal(ragBody.status, 'accepted');
+});
+
+test('POST /api/rag/chunks rejects duplicate chunk_no', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const threadStartBody = await threadStartRes.json();
+  const threadId = threadStartBody.thread?.id;
+  assert.equal(typeof threadId, 'string');
+
+  const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      role: 'assistant',
+      client_message_id: 'cm-rag-dup-1',
+      ciphertext: 'cipher-text-base64',
+      iv: 'iv-base64',
+      alg: 'AES-256-GCM',
+      v: 1,
+      wrapped_key: 'wrapped-key-base64',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-1',
+    }),
+  });
+  assert.equal(saveRes.status, 200);
+
+  const res = await mf.dispatchFetch('http://localhost/api/rag/chunks', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      client_message_id: 'cm-rag-dup-1',
+      chunks: [
+        { chunk_no: 0, text: 'a' },
+        { chunk_no: 0, text: 'b' },
+      ],
+    }),
+  });
+
+  assert.equal(res.status, 400);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'BAD_REQUEST');
+  assert.equal(body.error?.message, 'chunk_no must be unique within chunks');
+});
+
 test('GET /api/crypto/kms_public_key returns kid and PEM public key', async () => {
   const res = await mf.dispatchFetch('http://localhost/api/crypto/kms_public_key');
 

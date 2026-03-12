@@ -165,7 +165,7 @@
 - [x] 7.3 API: env追加（QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION等）（2pt）
 	- 反映: `apps/api/src/types/env.ts`（Qdrant env型）
 	- 運用追記: `apps/api/wrangler.toml`（環境ごとの Qdrant vars 管理コメント）, `apps/api/README.md`（必須 Vars/Secrets に Qdrant を追記）
-- [ ] 8.1 Web→API: チャンクのアップサートAPI追加（例: POST /api/rag/chunks）（4pt）
+- [x] 8.1 Web→API: チャンクのアップサートAPI追加（例: POST /api/rag/chunks）（4pt）
 - [ ] 8.2 API: embedding生成（OpenAI embeddings等）→ Qdrant upsert（5pt）
 
 ## 2026.03.14

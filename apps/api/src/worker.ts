@@ -20,6 +20,7 @@ import { threadMessagesHandler } from "./handlers/thread_messages.js";
 
 import { llmPingHandler } from "./handlers/llm_ping.js";
 import { llmRespondHandler } from "./handlers/llm_respond.js";
+import { ragChunksUpsertHandler } from "./handlers/rag_chunks.js";
 
 import { stripeWebhookHandler } from "./handlers/stripe_webhook.js";
 import { dekUnsealHandler } from "./handlers/dek_unseal.js";
@@ -88,6 +89,7 @@ router.on("POST", "/api/llm/respond", llmRespondHandler);
 router.on("POST", "/api/stripe/webhook", stripeWebhookHandler);
 router.on("GET", "/api/crypto/kms_public_key", kmsPublicKeyHandler);
 router.on("POST", "/api/crypto/dek/unseal", dekUnsealHandler);
+router.on("POST", "/api/rag/chunks", ragChunksUpsertHandler);
 
 const worker: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
