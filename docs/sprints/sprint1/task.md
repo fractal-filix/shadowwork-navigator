@@ -151,7 +151,7 @@
 - [x] 5.2 Web: thread/messages の暗号文を復号して表示（平文前提の実装を修正）（4pt）
 
 ## 2026.03.12
-- [ ] 5.3 Web: 送信フロー整理（thread/chat → thread/message に暗号化保存）（5pt）
+- [x] 5.3 Web: 送信フロー整理（thread/chat → thread/message に暗号化保存）（5pt）
 - [ ] 6.1 Web: purchaseページをSupabaseログイン前提に更新（3pt）
 - [ ] 6.2 API: Checkout Session作成をJWTのsubで確実に紐付け（3pt）
 - [ ] 6.3 Web: /api/paid の反映、未paid時の導線（purchaseへ誘導）（2pt）

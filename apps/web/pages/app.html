@@ -22,6 +22,8 @@
 
   <script type="module">
     import { API_BASE, apiPaid, getSupabaseUser } from "/lib/client.js";
+    import { encryptMessageContent } from "/lib/crypto.js";
+    import { fetchKmsPublicKey, wrapRawKeyWithPublicKey } from "/lib/envelope.js";
     import { decryptThreadMessages } from "/lib/thread_messages.js";
     const DEBUG_UI = false; // true にするとUIにもJSONを出す
 
@@ -30,6 +32,7 @@
     const $debug = document.getElementById("debug-state");
     const $send = document.getElementById("send");
     const $next = document.getElementById("next");
+    let kmsKeyCache = null;
 
     function dbgErr(...args) { if (DEBUG_UI) console.error(...args); }
 
@@ -196,6 +199,72 @@
       return false;
     }
 
+    function createClientMessageId(prefix) {
+      if (globalThis.crypto?.randomUUID) {
+        return `${prefix}-${globalThis.crypto.randomUUID()}`;
+      }
+      return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    }
+
+    async function getKmsKey() {
+      if (kmsKeyCache) return kmsKeyCache;
+      kmsKeyCache = await fetchKmsPublicKey({ apiBase: API_BASE });
+      return kmsKeyCache;
+    }
+
+    async function storeEncryptedMessage({ role, content, threadId, clientMessageId }) {
+      const encrypted = await encryptMessageContent(content);
+      const kms = await getKmsKey();
+      const wrapped = await wrapRawKeyWithPublicKey({
+        rawKeyBase64: encrypted.rawKey,
+        publicKeyPem: kms.publicKeyPem,
+      });
+
+      const payload = {
+        role,
+        thread_id: threadId,
+        client_message_id: clientMessageId,
+        ciphertext: encrypted.ciphertext,
+        iv: encrypted.iv,
+        alg: encrypted.alg,
+        v: encrypted.v,
+        kid: null,
+        wrapped_key: wrapped.wrapped_key,
+        wrapped_key_alg: wrapped.wrapped_key_alg,
+        wrapped_key_kid: kms.kid,
+      };
+
+      const res = await fetch(`${API_BASE}/api/thread/message`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "thread/message failed");
+      }
+
+      return data;
+    }
+
+    async function requestAssistantReply(message) {
+      const res = await fetch(`${API_BASE}/api/thread/chat`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok || typeof data?.reply !== "string") {
+        throw new Error(data?.error || "thread/chat failed");
+      }
+
+      return data;
+    }
+
     // === 起動時 ===
     // NOTE: dashboard から「続きから再開」で遷移したとき、
     // ブラウザの BFCache（戻る/進むキャッシュ）で app.html が復元されると、
@@ -296,38 +365,50 @@
       $send.disabled = true;
 
       try {
+        const threadId = window.__STATE__?.thread?.id;
+        if (!threadId) {
+          throw new Error("active thread is missing");
+        }
+
         appendLine(`You: ${message}`);
 
-        const res = await fetch(`${API_BASE}/api/thread/message`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
+        const userStoreData = await storeEncryptedMessage({
+          role: "user",
+          content: message,
+          threadId,
+          clientMessageId: createClientMessageId("user"),
         });
-
-        const data = await res.json().catch(() => ({}));
-        console.log("[thread/message]", data);
+        console.log("[thread/message:user]", userStoreData);
         if (DEBUG_UI) {
-          appendLine(`[thread/message] ${JSON.stringify(data)}`);
+          appendLine(`[thread/message:user] ${JSON.stringify(userStoreData)}`);
         }
 
-        if (!res.ok || !data.ok) {
-          appendLine(`[ERROR] ${JSON.stringify(data)}`);
-          return;
-        }
+        const chatData = await requestAssistantReply(message);
+        console.log("[thread/chat]", chatData);
 
         // AIの返答を会話形式で表示
-        appendLine(`AI: ${data.reply ?? "(no reply)"}`);
+        appendLine(`AI: ${chatData.reply ?? "(no reply)"}`);
+
+        const assistantStoreData = await storeEncryptedMessage({
+          role: "assistant",
+          content: chatData.reply,
+          threadId,
+          clientMessageId: createClientMessageId("assistant"),
+        });
+        console.log("[thread/message:assistant]", assistantStoreData);
+        if (DEBUG_UI) {
+          appendLine(`[thread/message:assistant] ${JSON.stringify(assistantStoreData)}`);
+        }
 
         if (!window.__STATE__) window.__STATE__ = {};
-        if (data.thread) {
+        if (chatData.thread) {
           window.__STATE__ = window.__STATE__ ?? {};
-          window.__STATE__.thread = data.thread;
+          window.__STATE__.thread = chatData.thread;
           renderDebug();
         }
 
         // close_thread なら thread を閉じて次スレッドへ
-        if (shouldCloseFromResponse(data)) {
+        if (shouldCloseFromResponse(chatData)) {
           appendLine("---- このスレッドを終了します ----");
           const ok = await closeThread();
           if (ok) {
