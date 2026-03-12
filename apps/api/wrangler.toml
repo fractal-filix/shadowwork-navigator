@@ -12,6 +12,9 @@ SUPABASE_URL="https://bekltsvemtvbjxwrqvxg.supabase.co"
 SUPABASE_JWKS_URL="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1/.well-known/jwks.json"
 SUPABASE_ISSUER="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1"
 SUPABASE_AUDIENCE="authenticated"
+# Qdrant vars are managed per environment in Cloudflare (vars/secrets).
+# QDRANT_URL = "https://<cluster>.<region>.qdrant.cloud"
+# QDRANT_COLLECTION = "<collection_name>"
 
 [env.staging]
 name = "filix-shadowwork-api-staging"
@@ -30,6 +33,9 @@ SUPABASE_URL="https://bekltsvemtvbjxwrqvxg.supabase.co"
 SUPABASE_JWKS_URL="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1/.well-known/jwks.json"
 SUPABASE_ISSUER="https://bekltsvemtvbjxwrqvxg.supabase.co/auth/v1"
 SUPABASE_AUDIENCE="authenticated"
+# Qdrant vars are managed per environment in Cloudflare (vars/secrets).
+# QDRANT_URL = "https://<cluster>.<region>.qdrant.cloud"
+# QDRANT_COLLECTION = "<collection_name>"
 
 [env.production]
 name = "filix-shadowwork-api"

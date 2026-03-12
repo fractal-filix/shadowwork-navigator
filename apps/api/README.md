@@ -73,6 +73,8 @@ pnpm exec wrangler secret list --env production
 - `SUPABASE_JWKS_URL`
 - `SUPABASE_ISSUER`
 - `SUPABASE_AUDIENCE`
+- `QDRANT_URL`
+- `QDRANT_COLLECTION`
 
 必須 Secrets（3/1時点）:
 - `ADMIN_MEMBER_IDS`
@@ -81,6 +83,7 @@ pnpm exec wrangler secret list --env production
 - `KMS_KEY_ID`
 - `JWT_SIGNING_SECRET`
 - `OPENAI_API_KEY`
+- `QDRANT_API_KEY`
 - `PAID_ADMIN_TOKEN`
 - `STRIPE_PRICE_ID`
 - `STRIPE_SECRET_KEY`
