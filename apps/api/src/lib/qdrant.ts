@@ -1,7 +1,7 @@
 import type { Env } from '../types/env.js';
 import { fetchExternalApi } from './external_api.js';
 
-type QdrantEnv = Pick<Env, 'QDRANT_URL' | 'QDRANT_API_KEY' | 'QDRANT_COLLECTION' | 'EXTERNAL_API_TIMEOUT_MS'>;
+type QdrantEnv = Pick<Env, 'QDRANT_URL' | 'QDRANT_API_KEY' | 'QDRANT_COLLECTION' | 'EXTERNAL_API_TIMEOUT_MS' | 'APP_ENV'>;
 
 export type QdrantPoint = {
   id: string | number;
@@ -42,9 +42,14 @@ function readRequired(value: string | undefined, name: string): string {
   return normalized;
 }
 
-export function normalizeQdrantBaseUrl(rawUrl: string): string {
+export function normalizeQdrantBaseUrl(rawUrl: string, appEnv?: string): string {
   const url = new URL(rawUrl);
-  if (url.protocol !== 'https:') {
+  const isTestEnv = appEnv === 'test';
+  const isLoopbackHttp =
+    url.protocol === 'http:' &&
+    (url.hostname === '127.0.0.1' || url.hostname === 'localhost');
+
+  if (url.protocol !== 'https:' && !(isTestEnv && isLoopbackHttp)) {
     throw new Error('QDRANT_URL must use https:// (TLS required)');
   }
   return url.toString().replace(/\/$/, '');
@@ -56,7 +61,7 @@ export function getQdrantConfig(env: QdrantEnv): {
   collection: string;
 } {
   return {
-    baseUrl: normalizeQdrantBaseUrl(readRequired(env.QDRANT_URL, 'QDRANT_URL')),
+    baseUrl: normalizeQdrantBaseUrl(readRequired(env.QDRANT_URL, 'QDRANT_URL'), env.APP_ENV),
     apiKey: readRequired(env.QDRANT_API_KEY, 'QDRANT_API_KEY'),
     collection: readRequired(env.QDRANT_COLLECTION, 'QDRANT_COLLECTION'),
   };

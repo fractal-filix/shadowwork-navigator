@@ -35,6 +35,11 @@ let stripeCheckoutCreateStatus = 200;
 let openAiResponsesMode = 'ok';
 let openAiResponsesRequestCount = 0;
 let lastOpenAiResponsesRequestJson = null;
+let openAiEmbeddingsMode = 'ok';
+let openAiEmbeddingsRequestCount = 0;
+let lastOpenAiEmbeddingsRequestJson = null;
+let qdrantUpsertRequestCount = 0;
+let lastQdrantUpsertRequestJson = null;
 let mockKmsDecryptMode = 'ok';
 let mockAwsRequests = [];
 
@@ -123,6 +128,7 @@ function buildEnvBindings() {
     APP_ENV: 'test',
     OPENAI_API_KEY: 'test-openai-key',
     OPENAI_API_BASE_URL: mockBaseUrl,
+    OPENAI_EMBEDDING_MODEL: 'text-embedding-3-small',
     STRIPE_SECRET_KEY: 'sk_test_123',
     STRIPE_WEBHOOK_SECRET: 'whsec_test_123',
     STRIPE_API_BASE_URL: mockBaseUrl,
@@ -140,6 +146,9 @@ function buildEnvBindings() {
     SUPABASE_JWKS_URL: `${mockBaseUrl}/auth/v1/.well-known/jwks.json`,
     SUPABASE_ISSUER,
     SUPABASE_AUDIENCE,
+    QDRANT_URL: mockBaseUrl,
+    QDRANT_API_KEY: 'test-qdrant-api-key',
+    QDRANT_COLLECTION: 'shadowwork_chunks',
     ALLOWED_ORIGINS: 'http://localhost:3000',
     ADMIN_MEMBER_IDS: 'member-admin',
     AWS_REGION: 'ap-southeast-2',
@@ -343,6 +352,74 @@ before(async () => {
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/v1/embeddings') {
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += String(chunk);
+      });
+      req.on('end', () => {
+        openAiEmbeddingsRequestCount += 1;
+        lastOpenAiEmbeddingsRequestJson = null;
+        try {
+          lastOpenAiEmbeddingsRequestJson = JSON.parse(raw || '{}');
+        } catch {
+          lastOpenAiEmbeddingsRequestJson = null;
+        }
+
+        if (openAiEmbeddingsMode === 'network_error') {
+          req.socket.destroy();
+          return;
+        }
+
+        if (openAiEmbeddingsMode === 'error_json') {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'mock embeddings error' } }));
+          return;
+        }
+
+        const inputs = Array.isArray(lastOpenAiEmbeddingsRequestJson?.input)
+          ? lastOpenAiEmbeddingsRequestJson.input
+          : [];
+
+        const data = inputs.map((_, index) => ({
+          object: 'embedding',
+          index,
+          embedding: [index + 0.1, index + 0.2, index + 0.3],
+        }));
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          object: 'list',
+          data,
+          model: 'text-embedding-3-small',
+        }));
+      });
+      return;
+    }
+
+    if (req.method === 'PUT' && url.pathname === '/collections/shadowwork_chunks/points') {
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += String(chunk);
+      });
+      req.on('end', () => {
+        qdrantUpsertRequestCount += 1;
+        lastQdrantUpsertRequestJson = null;
+        try {
+          lastQdrantUpsertRequestJson = JSON.parse(raw || '{}');
+        } catch {
+          lastQdrantUpsertRequestJson = null;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'ok',
+          result: { operation_id: 777 },
+        }));
+      });
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/kms') {
       const target = req.headers['x-amz-target'];
 
@@ -443,6 +520,11 @@ beforeEach(async () => {
     openAiResponsesMode = 'ok';
     openAiResponsesRequestCount = 0;
     lastOpenAiResponsesRequestJson = null;
+    openAiEmbeddingsMode = 'ok';
+    openAiEmbeddingsRequestCount = 0;
+    lastOpenAiEmbeddingsRequestJson = null;
+    qdrantUpsertRequestCount = 0;
+    lastQdrantUpsertRequestJson = null;
     mockKmsDecryptMode = 'ok';
     mockAwsRequests = [];
     const workerPath = path.resolve('dist', 'worker.js');
@@ -1742,6 +1824,105 @@ test('POST /api/rag/chunks accepts chunks for an owned message', async () => {
   assert.equal(ragBody.message_id, messageId);
   assert.equal(ragBody.chunk_count, 2);
   assert.equal(ragBody.status, 'accepted');
+
+  assert.equal(openAiEmbeddingsRequestCount, 1);
+  assert.deepEqual(lastOpenAiEmbeddingsRequestJson, {
+    model: 'text-embedding-3-small',
+    input: ['最初のチャンク', '二つ目のチャンク'],
+  });
+
+  assert.equal(qdrantUpsertRequestCount, 1);
+  assert.deepEqual(lastQdrantUpsertRequestJson, {
+    points: [
+      {
+        id: `${messageId}#0`,
+        vector: [0.1, 0.2, 0.3],
+        payload: {
+          user_id: MEMBER_ID,
+          thread_id: threadId,
+          message_id: messageId,
+          chunk_no: 0,
+          text: '最初のチャンク',
+        },
+      },
+      {
+        id: `${messageId}#1`,
+        vector: [1.1, 1.2, 1.3],
+        payload: {
+          user_id: MEMBER_ID,
+          thread_id: threadId,
+          message_id: messageId,
+          chunk_no: 1,
+          text: '二つ目のチャンク',
+        },
+      },
+    ],
+  });
+});
+
+test('POST /api/rag/chunks returns 502 when embeddings generation fails', async () => {
+  openAiEmbeddingsMode = 'error_json';
+
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const threadStartBody = await threadStartRes.json();
+  const threadId = threadStartBody.thread?.id;
+  assert.equal(typeof threadId, 'string');
+
+  const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      role: 'assistant',
+      client_message_id: 'cm-rag-embed-fail-1',
+      ciphertext: 'cipher-text-base64',
+      iv: 'iv-base64',
+      alg: 'AES-256-GCM',
+      v: 1,
+      wrapped_key: 'wrapped-key-base64',
+      wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+      wrapped_key_kid: 'kms-key-1',
+    }),
+  });
+  assert.equal(saveRes.status, 200);
+
+  const res = await mf.dispatchFetch('http://localhost/api/rag/chunks', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      thread_id: threadId,
+      client_message_id: 'cm-rag-embed-fail-1',
+      chunks: [{ chunk_no: 0, text: 'test chunk' }],
+    }),
+  });
+
+  assert.equal(res.status, 502);
+  const body = await res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'INTERNAL_ERROR');
+  assert.equal(body.error?.message, 'Embedding generation failed');
+  assert.equal(qdrantUpsertRequestCount, 0);
 });
 
 test('POST /api/rag/chunks rejects duplicate chunk_no', async () => {
