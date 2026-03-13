@@ -1838,6 +1838,7 @@ test('POST /api/rag/chunks accepts chunks for an owned message', async () => {
         id: `${messageId}#0`,
         vector: [0.1, 0.2, 0.3],
         payload: {
+          schema: 'rag_chunk_v1',
           user_id: MEMBER_ID,
           thread_id: threadId,
           message_id: messageId,
@@ -1849,6 +1850,7 @@ test('POST /api/rag/chunks accepts chunks for an owned message', async () => {
         id: `${messageId}#1`,
         vector: [1.1, 1.2, 1.3],
         payload: {
+          schema: 'rag_chunk_v1',
           user_id: MEMBER_ID,
           thread_id: threadId,
           message_id: messageId,

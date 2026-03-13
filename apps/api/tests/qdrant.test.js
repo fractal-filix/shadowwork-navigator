@@ -76,7 +76,14 @@ test('qdrantUpsert sends points to the collection endpoint', async () => {
       {
         id: 'msg-1#0',
         vector: [0.12, 0.34, 0.56],
-        payload: { user_id: 'user-1', thread_id: 'thread-1', chunk_no: 0, text: 'hello' },
+        payload: qdrantModule.buildQdrantChunkPayload({
+          userId: 'user-1',
+          threadId: 'thread-1',
+          messageId: 'msg-1',
+          clientMessageId: ' client-msg-1 ',
+          chunkNo: 0,
+          text: 'hello',
+        }),
       },
     ],
   );
@@ -89,11 +96,62 @@ test('qdrantUpsert sends points to the collection endpoint', async () => {
       {
         id: 'msg-1#0',
         vector: [0.12, 0.34, 0.56],
-        payload: { user_id: 'user-1', thread_id: 'thread-1', chunk_no: 0, text: 'hello' },
+        payload: {
+          schema: 'rag_chunk_v1',
+          user_id: 'user-1',
+          thread_id: 'thread-1',
+          message_id: 'msg-1',
+          client_message_id: 'client-msg-1',
+          chunk_no: 0,
+          text: 'hello',
+        },
       },
     ],
   });
   assert.deepEqual(result, { operationId: 99 });
+});
+
+test('buildQdrantChunkPayload fixes the message-chunk payload contract', () => {
+  assert.deepEqual(
+    qdrantModule.buildQdrantChunkPayload({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      messageId: 'msg-1',
+      clientMessageId: 'client-msg-1',
+      chunkNo: 3,
+      text: 'chunk text',
+    }),
+    {
+      schema: 'rag_chunk_v1',
+      user_id: 'user-1',
+      thread_id: 'thread-1',
+      message_id: 'msg-1',
+      client_message_id: 'client-msg-1',
+      chunk_no: 3,
+      text: 'chunk text',
+    },
+  );
+});
+
+test('buildQdrantChunkPayload omits blank client_message_id', () => {
+  assert.deepEqual(
+    qdrantModule.buildQdrantChunkPayload({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      messageId: 'msg-1',
+      clientMessageId: '   ',
+      chunkNo: 0,
+      text: 'chunk text',
+    }),
+    {
+      schema: 'rag_chunk_v1',
+      user_id: 'user-1',
+      thread_id: 'thread-1',
+      message_id: 'msg-1',
+      chunk_no: 0,
+      text: 'chunk text',
+    },
+  );
 });
 
 test('qdrantSearch posts vector queries and returns hits', async () => {

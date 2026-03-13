@@ -4,7 +4,7 @@ import { json, badRequest, methodNotAllowed, unauthorized, forbidden, errorRespo
 import { authenticateRequest } from '../lib/auth.js';
 import { getUserPaidFlag } from '../lib/paid.js';
 import { createEmbeddings } from '../lib/embeddings.js';
-import { qdrantUpsert } from '../lib/qdrant.js';
+import { buildQdrantChunkPayload, qdrantUpsert } from '../lib/qdrant.js';
 
 const MAX_ID_LENGTH = 128;
 const MAX_CHUNKS = 64;
@@ -152,13 +152,14 @@ export async function ragChunksUpsertHandler({ request, env, url }: RagChunksHan
       normalizedChunks.map((chunk, index) => ({
         id: `${targetMessageId}#${chunk.chunk_no}`,
         vector: vectors[index],
-        payload: {
-          user_id: userId,
-          thread_id: threadId,
-          message_id: targetMessageId,
-          chunk_no: chunk.chunk_no,
+        payload: buildQdrantChunkPayload({
+          userId,
+          threadId,
+          messageId: targetMessageId,
+          clientMessageId,
+          chunkNo: chunk.chunk_no,
           text: chunk.text,
-        },
+        }),
       })),
     );
   } catch {
