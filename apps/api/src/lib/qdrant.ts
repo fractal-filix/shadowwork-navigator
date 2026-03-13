@@ -9,6 +9,25 @@ export type QdrantPoint = {
   payload?: Record<string, unknown>;
 };
 
+export type QdrantChunkPayload = {
+  schema: 'rag_chunk_v1';
+  user_id: string;
+  thread_id: string;
+  message_id: string;
+  client_message_id?: string;
+  chunk_no: number;
+  text: string;
+};
+
+export type BuildQdrantChunkPayloadParams = {
+  userId: string;
+  threadId: string;
+  messageId: string;
+  clientMessageId?: string | null;
+  chunkNo: number;
+  text: string;
+};
+
 export type QdrantUpsertResult = {
   operationId: number | string | null;
 };
@@ -73,6 +92,24 @@ function buildQdrantPath(collection: string, suffix: string): string {
 
 function truncateForError(bodyText: string): string {
   return bodyText.length > 300 ? `${bodyText.slice(0, 300)}...` : bodyText;
+}
+
+export function buildQdrantChunkPayload(params: BuildQdrantChunkPayloadParams): QdrantChunkPayload {
+  const payload: QdrantChunkPayload = {
+    schema: 'rag_chunk_v1',
+    user_id: params.userId,
+    thread_id: params.threadId,
+    message_id: params.messageId,
+    chunk_no: params.chunkNo,
+    text: params.text,
+  };
+
+  const normalizedClientMessageId = params.clientMessageId?.trim();
+  if (normalizedClientMessageId) {
+    payload.client_message_id = normalizedClientMessageId;
+  }
+
+  return payload;
 }
 
 async function qdrantJsonRequest<T>(env: QdrantEnv, path: string, init: RequestInit): Promise<T> {

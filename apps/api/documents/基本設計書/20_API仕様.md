@@ -396,6 +396,8 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 
 補足（RAG/ベクトル検索）:
 - ベクトルDBを活かすため、検索用チャンクは本文とは別に保存する（例: Qdrant）。チャンクはやむを得ず平文を含みうるため、取り扱いは `50_セキュリティ` に従う。
+- Qdrant payload は `rag_chunk_v1` を現行仕様とし、少なくとも `user_id`, `thread_id`, `message_id`, `chunk_no`, `text` を保持する。`client_message_id` は取得できる場合のみ付与する。
+- point の `id` は `${message_id}#${chunk_no}` とし、同一 message 内で chunk を一意に更新できる形に固定する。
 
 ---
 

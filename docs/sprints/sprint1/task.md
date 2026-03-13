@@ -169,7 +169,9 @@
 - [x] 8.2 API: embedding生成（OpenAI embeddings等）→ Qdrant upsert（5pt）
 
 ## 2026.03.14
-- [ ] 8.3 Qdrant payload仕様を確定（user_id, thread_id, message_id, chunk_no, text 等）（3pt）
+- [x] 8.3 Qdrant payload仕様を確定（user_id, thread_id, message_id, chunk_no, text 等）（3pt）
+	- 確定内容: `schema='rag_chunk_v1'`, 必須 `user_id` / `thread_id` / `message_id` / `chunk_no` / `text`, 任意 `client_message_id`
+	- point id: `${message_id}#${chunk_no}` で固定（同一 message の chunk 再アップサートを上書き）
 - [ ] 9.1 API: クエリ埋め込み → Qdrant search → 上位Kチャンクを prompt/context に追加（6pt）
 - [ ] 9.2 API: user_idで必ず絞り込み（他ユーザー混入を防ぐ）（3pt）
 - [ ] 10.1 API: ログ抑制（平文、チャンク平文、鍵素材を出さない）（3pt）
