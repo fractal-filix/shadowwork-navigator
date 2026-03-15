@@ -224,6 +224,8 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 - LLM利用料金の抑制を目的とした入力文字数制限は、本エンドポイントの平文入力（`message`）に対して適用する。
 - 旧カード関連フィールドは廃止済みで、現行契約には含めない。
 - `action: "next"` 指定時はLLM呼び出しを行わず、次アクション用の文面を返す。
+- `action: "next"` 以外では、`message` をクエリとして embedding を生成し、Qdrant 検索の上位チャンクを追加の system context として LLM に渡す。
+- RAG 文脈検索（embedding 生成または Qdrant search）に失敗した場合は、`502` / `INTERNAL_ERROR` を返す。
 
 ---
 
