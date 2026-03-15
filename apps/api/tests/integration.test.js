@@ -40,6 +40,10 @@ let openAiEmbeddingsRequestCount = 0;
 let lastOpenAiEmbeddingsRequestJson = null;
 let qdrantUpsertRequestCount = 0;
 let lastQdrantUpsertRequestJson = null;
+let qdrantSearchMode = 'ok';
+let qdrantSearchRequestCount = 0;
+let lastQdrantSearchRequestJson = null;
+let qdrantSearchHits = [];
 let mockKmsDecryptMode = 'ok';
 let mockAwsRequests = [];
 
@@ -420,6 +424,35 @@ before(async () => {
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/collections/shadowwork_chunks/points/search') {
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += String(chunk);
+      });
+      req.on('end', () => {
+        qdrantSearchRequestCount += 1;
+        lastQdrantSearchRequestJson = null;
+        try {
+          lastQdrantSearchRequestJson = JSON.parse(raw || '{}');
+        } catch {
+          lastQdrantSearchRequestJson = null;
+        }
+
+        if (qdrantSearchMode === 'error_json') {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'mock qdrant search error' } }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'ok',
+          result: qdrantSearchHits,
+        }));
+      });
+      return;
+    }
+
     if (req.method === 'POST' && url.pathname === '/kms') {
       const target = req.headers['x-amz-target'];
 
@@ -525,6 +558,10 @@ beforeEach(async () => {
     lastOpenAiEmbeddingsRequestJson = null;
     qdrantUpsertRequestCount = 0;
     lastQdrantUpsertRequestJson = null;
+    qdrantSearchMode = 'ok';
+    qdrantSearchRequestCount = 0;
+    lastQdrantSearchRequestJson = null;
+    qdrantSearchHits = [];
     mockKmsDecryptMode = 'ok';
     mockAwsRequests = [];
     const workerPath = path.resolve('dist', 'worker.js');
@@ -1540,6 +1577,122 @@ test('POST /api/thread/chat sends only system prompt and user message to OpenAI'
   assert.equal(input[0]?.role, 'system');
   assert.equal(input[1]?.role, 'user');
   assert.equal(input[1]?.content, 'hello');
+});
+
+test('POST /api/thread/chat embeds the query, searches Qdrant, and injects top chunks into OpenAI context', async () => {
+  qdrantSearchHits = [
+    {
+      id: 'msg-1#0',
+      score: 0.99,
+      payload: { text: '最上位チャンク', chunk_no: 0, message_id: 'msg-1' },
+    },
+    {
+      id: 'msg-2#0',
+      score: 0.97,
+      payload: { text: '二番目チャンク', chunk_no: 0, message_id: 'msg-2' },
+    },
+    {
+      id: 'msg-3#1',
+      score: 0.95,
+      payload: { text: '三番目チャンク', chunk_no: 1, message_id: 'msg-3' },
+    },
+    {
+      id: 'msg-4#2',
+      score: 0.93,
+      payload: { text: '四番目チャンク', chunk_no: 2, message_id: 'msg-4' },
+    },
+  ];
+
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: '過去の文脈も踏まえて教えて' }),
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(openAiEmbeddingsRequestCount, 1);
+  assert.deepEqual(lastOpenAiEmbeddingsRequestJson?.input, ['過去の文脈も踏まえて教えて']);
+  assert.equal(qdrantSearchRequestCount, 1);
+  assert.deepEqual(lastQdrantSearchRequestJson?.vector, [0.1, 0.2, 0.3]);
+  assert.equal(lastQdrantSearchRequestJson?.limit, 3);
+  assert.ok(lastOpenAiResponsesRequestJson);
+
+  const input = lastOpenAiResponsesRequestJson.input;
+  assert.ok(Array.isArray(input));
+  assert.equal(input.length, 3);
+  assert.equal(input[0]?.role, 'system');
+  assert.equal(input[1]?.role, 'system');
+  assert.match(input[1]?.content, /関連チャンク/);
+  assert.match(input[1]?.content, /最上位チャンク/);
+  assert.match(input[1]?.content, /二番目チャンク/);
+  assert.match(input[1]?.content, /三番目チャンク/);
+  assert.doesNotMatch(input[1]?.content, /四番目チャンク/);
+  assert.equal(input[2]?.role, 'user');
+  assert.equal(input[2]?.content, '過去の文脈も踏まえて教えて');
+});
+
+test('POST /api/thread/chat returns standardized internal error when RAG context lookup fails', async () => {
+  qdrantSearchMode = 'error_json';
+
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: 'help' }),
+  });
+
+  assert.equal(res.status, 502);
+  assert.equal(openAiEmbeddingsRequestCount, 1);
+  assert.equal(qdrantSearchRequestCount, 1);
+  assert.equal(openAiResponsesRequestCount, 0);
+
+  const body = await res.json();
+  assert.deepEqual(body, {
+    ok: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'RAG context lookup failed',
+    },
+  });
 });
 
 test('POST /api/thread/chat ignores legacy step2_meta_card on step2', async () => {

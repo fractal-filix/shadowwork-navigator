@@ -6,8 +6,11 @@ import { authenticateRequest } from '../lib/auth.js';
 import { getUserPaidFlag } from '../lib/paid.js';
 import { extractOutputText, getOpenAiModel } from '../lib/llm.js';
 import { fetchExternalApi } from '../lib/external_api.js';
+import { createEmbeddings } from '../lib/embeddings.js';
+import { qdrantSearch } from '../lib/qdrant.js';
 
 const MAX_MESSAGE_LENGTH = 2000;
+const RAG_CONTEXT_LIMIT = 3;
 
 function buildSystemPrompt(step: number, questionNo?: number | null, sessionNo?: number | null): string {
   if (Number(step) === 1) {
@@ -35,6 +38,7 @@ async function generateAssistantReply(
   questionNo: number | null,
   sessionNo: number | null,
   userText: string,
+  ragContextPrompt?: string | null,
 ): Promise<{ ok: true; reply: string } | { ok: false; response: Response }> {
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) return { ok: false, response: errorResponse('INTERNAL_ERROR', 'OPENAI_API_KEY is not set', 500) };
@@ -42,12 +46,14 @@ async function generateAssistantReply(
   const model = getOpenAiModel(env);
   const openAiBase = (env as Record<string, unknown>).OPENAI_API_BASE_URL as string | undefined;
   const openAiBaseUrl = openAiBase && openAiBase.trim() ? openAiBase.trim() : "https://api.openai.com";
+  const input = [
+    { role: "system", content: buildSystemPrompt(step, questionNo, sessionNo) },
+    ...(ragContextPrompt ? [{ role: 'system', content: ragContextPrompt }] : []),
+    { role: "user", content: userText },
+  ];
   const payload = {
     model,
-    input: [
-      { role: "system", content: buildSystemPrompt(step, questionNo, sessionNo) },
-      { role: "user", content: userText }
-    ]
+    input,
   };
 
   let r: Response;
@@ -94,6 +100,49 @@ async function generateAssistantReply(
   }
 
   return { ok: true, reply: reply.trim() };
+}
+
+function extractRagChunkText(payload: Record<string, unknown> | undefined): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  const text = payload.text;
+  if (typeof text !== 'string') {
+    return null;
+  }
+
+  const normalized = text.trim();
+  return normalized ? normalized : null;
+}
+
+function buildRagContextPrompt(chunks: string[]): string | null {
+  if (chunks.length === 0) {
+    return null;
+  }
+
+  const lines = chunks.map((chunk, index) => `${index + 1}. ${chunk}`);
+  return ['関連チャンク:', ...lines, '上記を参考情報として扱い、断定しすぎず日本語で応答してください。'].join('\n');
+}
+
+async function lookupRagContext(env: Env, userText: string): Promise<string[]> {
+  const vectors = await createEmbeddings(env, [userText]);
+  const queryVector = vectors[0];
+  if (!Array.isArray(queryVector) || queryVector.length === 0) {
+    throw new Error('query embedding missing');
+  }
+
+  const hits = await qdrantSearch(env, {
+    vector: queryVector,
+    limit: RAG_CONTEXT_LIMIT,
+    withPayload: true,
+    withVector: false,
+  });
+
+  return hits
+    .map((hit) => extractRagChunkText(hit.payload))
+    .filter((chunk): chunk is string => typeof chunk === 'string')
+    .slice(0, RAG_CONTEXT_LIMIT);
 }
 
 interface ThreadChatHandlerContext {
@@ -163,12 +212,20 @@ export async function threadChatHandler({ request, env, url }: ThreadChatHandler
     return badRequest(`message is too long (max ${MAX_MESSAGE_LENGTH} chars)`);
   }
 
+  let ragContextPrompt: string | null = null;
+  try {
+    ragContextPrompt = buildRagContextPrompt(await lookupRagContext(env, content));
+  } catch {
+    return errorResponse('INTERNAL_ERROR', 'RAG context lookup failed', 502);
+  }
+
   const replyResult = await generateAssistantReply(
     env,
     thread.step,
     thread.question_no,
     thread.session_no,
     content,
+    ragContextPrompt,
   );
   if (!replyResult.ok) return replyResult.response;
 
