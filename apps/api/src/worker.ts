@@ -1,6 +1,7 @@
 import type { Env } from './types/env.js';
 import { createRouter } from "./routes.js";
 import { errorResponse } from "./lib/http.js";
+import { applyRateLimit } from './lib/rate_limit.js';
 
 import { healthHandler } from "./handlers/health.js";
 import { authExchangeHandler } from "./handlers/auth_exchange.js";
@@ -101,6 +102,11 @@ const worker: ExportedHandler<Env> = {
     const ch = corsHeaders(origin ?? undefined);
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: ch });
+    }
+
+    const limitedResponse = await applyRateLimit(request, env);
+    if (limitedResponse) {
+      return withCors(limitedResponse, ch);
     }
 
     let res: Response;
