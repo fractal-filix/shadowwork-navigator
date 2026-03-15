@@ -3,6 +3,7 @@ import type { CheckoutSessionCreateResponse } from '../types/api.js';
 import { errorResponse, json, unauthorized } from "../lib/http.js";
 import { authenticateRequest } from '../lib/auth.js';
 import { fetchExternalApi } from '../lib/external_api.js';
+import { logError } from '../lib/safe_log.js';
 
 interface CheckoutSessionCreateContext {
   request: Request;
@@ -66,14 +67,14 @@ export async function checkoutSessionCreateHandler({ request, env }: CheckoutSes
       },
       body: params.toString(),
     }, env);
-  } catch (e) {
-    console.error('checkoutSessionCreateHandler: stripe fetch failed', e);
+  } catch {
+    logError('checkoutSessionCreateHandler: stripe fetch failed');
     return errorResponse('INTERNAL_ERROR', 'stripe fetch failed', 502);
   }
 
   const stripeData = await stripeRes.json().catch(() => null) as { id?: string; url?: string } | null;
   if (!stripeRes.ok) {
-    console.error('checkoutSessionCreateHandler: stripe error', {
+    logError('checkoutSessionCreateHandler: stripe error', {
       status: stripeRes.status,
       data: stripeData,
     });

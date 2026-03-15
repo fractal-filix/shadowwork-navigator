@@ -6,6 +6,7 @@ import { authenticateRequest } from '../lib/auth.js';
 import { extractOutputText, getOpenAiModel } from '../lib/llm.js';
 import { getUserPaidFlag } from '../lib/paid.js';
 import { fetchExternalApi } from '../lib/external_api.js';
+import { logError } from '../lib/safe_log.js';
 
 const MAX_INPUT_LENGTH = 2000;
 
@@ -79,7 +80,7 @@ export async function llmRespondHandler({ request, env }: LlmRespondHandlerConte
       body: JSON.stringify(payload)
     }, env);
   } catch {
-    console.error('llmRespondHandler: OpenAI fetch failed');
+    logError('llmRespondHandler: OpenAI fetch failed');
     return errorResponse('INTERNAL_ERROR', 'OpenAI fetch failed', 502);
   }
 
@@ -88,12 +89,12 @@ export async function llmRespondHandler({ request, env }: LlmRespondHandlerConte
   try {
     data = JSON.parse(text);
   } catch {
-    console.error('llmRespondHandler: OpenAI returned non-JSON', { status: r.status });
+    logError('llmRespondHandler: OpenAI returned non-JSON', { status: r.status });
     return errorResponse('INTERNAL_ERROR', 'OpenAI returned non-JSON', 502);
   }
 
   if (!r.ok) {
-    console.error('llmRespondHandler: OpenAI error', { status: r.status });
+    logError('llmRespondHandler: OpenAI error', { status: r.status });
     return errorResponse('INTERNAL_ERROR', 'OpenAI error', 502);
   }
 

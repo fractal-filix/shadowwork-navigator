@@ -6,6 +6,7 @@
  */
 
 import { verifyJWT, extractJWTFromCookie } from './jwt.js';
+import { logDebug } from './safe_log.js';
 
 export interface AuthContext {
   memberId: string;
@@ -27,7 +28,7 @@ export async function authenticateRequest(
 
   const token = bearerToken || extractJWTFromCookie(request);
   if (!token) {
-    console.debug('authenticateRequest: no token in Cookie');
+    logDebug('authenticateRequest: no token in Cookie');
     return null;
   }
 

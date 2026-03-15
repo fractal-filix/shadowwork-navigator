@@ -174,7 +174,7 @@
 	- point id: `${message_id}#${chunk_no}` で固定（同一 message の chunk 再アップサートを上書き）
 - [x] 9.1 API: クエリ埋め込み → Qdrant search → 上位Kチャンクを prompt/context に追加（6pt）
 - [x] 9.2 API: user_idで必ず絞り込み（他ユーザー混入を防ぐ）（3pt）
-- [ ] 10.1 API: ログ抑制（平文、チャンク平文、鍵素材を出さない）（3pt）
+- [x] 10.1 API: ログ抑制（平文、チャンク平文、鍵素材を出さない）（3pt）
 
 ## 2026.03.15
 - [ ] 10.2 API: Rate limit / abuse対策（最低限）（4pt）
