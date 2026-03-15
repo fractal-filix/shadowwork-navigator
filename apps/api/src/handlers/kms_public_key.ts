@@ -2,6 +2,7 @@ import type { Env } from '../types/env.js';
 import type { KmsPublicKeyResponse } from '../types/api.js';
 import { json, internalError, methodNotAllowed } from '../lib/http.js';
 import { kmsGetPublicKey, publicKeyBase64ToPem } from '../lib/aws_kms.js';
+import { logError } from '../lib/safe_log.js';
 
 interface KmsPublicKeyHandlerContext {
   request: Request;
@@ -44,7 +45,7 @@ export async function kmsPublicKeyHandler({ request, env }: KmsPublicKeyHandlerC
 
     return json(response);
   } catch (error) {
-    console.error('KmsPublicKey failed', {
+    logError('KmsPublicKey failed', {
       keyId,
       error: String((error as Error)?.message || error),
     });

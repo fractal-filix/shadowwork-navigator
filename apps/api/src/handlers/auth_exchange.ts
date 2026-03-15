@@ -2,6 +2,7 @@ import type { Env } from '../types/env.js';
 import type { AuthExchangeResponse } from '../types/api.js';
 import { json, badRequest, methodNotAllowed, internalError, unauthorized, errorResponse } from '../lib/http.js';
 import { createJWT, createSetCookieHeader } from '../lib/jwt.js';
+import { logError } from '../lib/safe_log.js';
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from 'jose';
 
 interface AuthExchangeContext {
@@ -98,9 +99,9 @@ export async function authExchangeHandler({ request, env }: AuthExchangeContext)
       return unauthorized('supabase token verification failed');
     }
 
-    console.error('supabase jwt verify error:', err);
+    logError('supabase jwt verify error');
     return errorResponse('INTERNAL_ERROR', 'supabase jwt verify error', 502, {
-      message: String((err as Error)?.message || err),
+      message: '[REDACTED]',
     });
   }
 
@@ -122,7 +123,7 @@ export async function authExchangeHandler({ request, env }: AuthExchangeContext)
       ttlSeconds
     );
   } catch (err) {
-    console.error('jwt creation error:', err);
+    logError('jwt creation error');
     return internalError('jwt creation failed');
   }
 

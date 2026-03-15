@@ -3,6 +3,7 @@ import { json, badRequest, methodNotAllowed, unauthorized, forbidden, internalEr
 import { authenticateRequest } from '../lib/auth.js';
 import { getUserPaidFlag } from '../lib/paid.js';
 import { assumeRole, kmsDecrypt } from '../lib/aws_kms.js';
+import { logError, logInfo, logWarn } from '../lib/safe_log.js';
 
 interface DekUnsealRequestBody {
   wrapped_key?: unknown;
@@ -99,19 +100,19 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
     const msgRow = await env.DB.prepare('SELECT user_id FROM messages WHERE id = ? LIMIT 1').bind(message_id).first();
     if (!msgRow) {
       // テスト互換性のため、メッセージが見つからない場合は所有者チェックをスキップする。
-      console.warn('DekUnseal message not found; skipping ownership check', { user_id, thread_id, message_id });
+      logWarn('DekUnseal message not found; skipping ownership check', { user_id, thread_id, message_id });
     } else if (msgRow.user_id !== user_id) {
       return forbidden('not allowed to unseal this message');
     } else {
       targetUserId = msgRow.user_id;
     }
   } catch (e) {
-    console.error('DekUnseal DB lookup failed', { user_id, thread_id, message_id, error: String(e) });
+    logError('DekUnseal DB lookup failed', { user_id, thread_id, message_id, error_type: e instanceof Error ? e.name : typeof e });
     return internalError('internal db error');
   }
 
   // ここで監査ログを記録（まずは Cloudflare Workers のログ）。平文は出さない。
-  console.info('DekUnseal requested', {
+  logInfo('DekUnseal requested', {
     operator: user_id,
     owner: user_id,
     thread_id,
@@ -198,7 +199,7 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
         errorCode: 'decrypt_failed',
       });
     } catch (auditError) {
-      console.error('DekUnseal audit log insert failed', {
+      logError('DekUnseal audit log insert failed', {
         user_id,
         thread_id,
         message_id,
@@ -206,7 +207,7 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
       });
     }
 
-    console.error('DekUnseal failed', {
+    logError('DekUnseal failed', {
       user_id,
       thread_id,
       message_id,

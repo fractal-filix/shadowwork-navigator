@@ -6,6 +6,7 @@ import { authenticateRequest } from '../lib/auth.js';
 import { extractOutputText, getOpenAiModel } from '../lib/llm.js';
 import { getUserPaidFlag } from '../lib/paid.js';
 import { fetchExternalApi } from '../lib/external_api.js';
+import { logError } from '../lib/safe_log.js';
 
 interface LlmPingHandlerContext {
   request: Request;
@@ -53,7 +54,7 @@ export async function llmPingHandler({ request, env }: LlmPingHandlerContext): P
       body: JSON.stringify(payload)
     }, env);
   } catch {
-    console.error('llmPingHandler: OpenAI fetch failed');
+    logError('llmPingHandler: OpenAI fetch failed');
     return errorResponse('INTERNAL_ERROR', 'OpenAI fetch failed', 502);
   }
 
@@ -62,12 +63,12 @@ export async function llmPingHandler({ request, env }: LlmPingHandlerContext): P
   try {
     data = JSON.parse(text);
   } catch {
-    console.error('llmPingHandler: OpenAI returned non-JSON', { status: r.status });
+    logError('llmPingHandler: OpenAI returned non-JSON', { status: r.status });
     return errorResponse('INTERNAL_ERROR', 'OpenAI returned non-JSON', 502);
   }
 
   if (!r.ok) {
-    console.error('llmPingHandler: OpenAI error', { status: r.status });
+    logError('llmPingHandler: OpenAI error', { status: r.status });
     return errorResponse('INTERNAL_ERROR', 'OpenAI error', 502);
   }
 
