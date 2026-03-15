@@ -1124,6 +1124,33 @@ test('POST /api/llm/ping uses OPENAI_API_BASE_URL and returns mock pong', async 
   assert.equal(body.pong, 'mock reply');
 });
 
+test('POST /api/llm/ping rate limits repeated unauthenticated requests by IP', async () => {
+  const headers = {
+    'CF-Connecting-IP': '198.51.100.10',
+  };
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const res = await mf.dispatchFetch('http://localhost/api/llm/ping', {
+      method: 'POST',
+      headers,
+    });
+
+    assert.equal(res.status, 401);
+  }
+
+  const limitedRes = await mf.dispatchFetch('http://localhost/api/llm/ping', {
+    method: 'POST',
+    headers,
+  });
+
+  assert.equal(limitedRes.status, 429);
+  assert.equal(limitedRes.headers.get('retry-after'), '60');
+
+  const body = await limitedRes.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'RATE_LIMITED');
+});
+
 test('POST /api/llm/respond returns standardized internal error when OpenAI returns non-JSON', async () => {
   openAiResponsesMode = 'non_json';
 
@@ -1420,6 +1447,54 @@ test('POST /api/thread/chat accepts action=next and skips OpenAI call', async ()
   assert.equal(body.ok, true);
   assert.equal(typeof body.reply, 'string');
   assert.equal(openAiResponsesRequestCount, 0);
+});
+
+test('POST /api/thread/chat rate limits repeated requests per authenticated user', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const commonHeaders = {
+    ...buildAuthHeaders(MEMBER_ID),
+    'Content-Type': 'application/json',
+    'CF-Connecting-IP': '198.51.100.20',
+  };
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: commonHeaders,
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: commonHeaders,
+  });
+  assert.equal(threadStartRes.status, 200);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+      method: 'POST',
+      headers: commonHeaders,
+      body: JSON.stringify({ message: `hello-${attempt}` }),
+    });
+
+    assert.equal(res.status, 200);
+  }
+
+  const limitedRes = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: commonHeaders,
+    body: JSON.stringify({ message: 'hello-limit' }),
+  });
+
+  assert.equal(limitedRes.status, 429);
+  assert.equal(limitedRes.headers.get('retry-after'), '60');
+
+  const body = await limitedRes.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error?.code, 'RATE_LIMITED');
 });
 
 test('POST /api/thread/chat does not persist plaintext message', async () => {

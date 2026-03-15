@@ -84,8 +84,15 @@ export function methodNotAllowed(message = 'Method not allowed'): Response {
 /**
  * RATE_LIMITED エラーレスポンス
  */
-export function rateLimited(message = 'Rate limit exceeded'): Response {
-  return errorResponse('RATE_LIMITED', message, 429);
+export function rateLimited(message = 'Rate limit exceeded', extraHeaders: Record<string, string> = {}): Response {
+  const body = {
+    ok: false,
+    error: {
+      code: 'RATE_LIMITED',
+      message,
+    },
+  };
+  return json(body, 429, extraHeaders);
 }
 
 /**
