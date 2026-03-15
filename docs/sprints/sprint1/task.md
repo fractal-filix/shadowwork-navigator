@@ -178,5 +178,5 @@
 
 ## 2026.03.15
 - [x] 10.2 API: Rate limit / abuse対策（最低限）（4pt）
-- [ ] 10.3 tests: integrationテストをSupabase/新契約に追従（4pt）
+- [x] 10.3 tests: integrationテストをSupabase/新契約に追従（4pt）
 - [ ] 10.4 チェックリスト: βリリース手順（Workers/Pages/env/Stripe webhook/Qdrant/KMS）（3pt）

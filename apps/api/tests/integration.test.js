@@ -171,6 +171,33 @@ function buildAuthHeaders(memberId) {
   };
 }
 
+async function exchangeSupabaseSession(memberId = MEMBER_ID, payloadOverrides = {}, headerOverrides = {}) {
+  const res = await mf.dispatchFetch('http://localhost/api/auth/exchange', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      token: createSupabaseAccessToken(memberId, payloadOverrides, headerOverrides),
+    }),
+  });
+
+  assert.equal(res.status, 200);
+
+  const sessionCookie = (res.headers.get('Set-Cookie') || '').split(';', 1)[0];
+  assert.match(sessionCookie, /^access_token=/);
+
+  return {
+    response: res,
+    sessionCookie,
+  };
+}
+
+function buildSessionHeaders(sessionCookie, extraHeaders = {}) {
+  return {
+    Cookie: sessionCookie,
+    ...extraHeaders,
+  };
+}
+
 async function applyDdl(targetDb) {
   let execRes;
   try {
@@ -933,12 +960,11 @@ test('GET /api/paid rejects test header without JWT cookie', async () => {
 
 test('POST /api/checkout/session accepts non-memberstack subject id from JWT', async () => {
   const memberId = '3f9c5f71-4764-4ab2-9e6b-50f29ed8360e';
+  const { sessionCookie } = await exchangeSupabaseSession(memberId);
+
   const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
     method: 'POST',
-    headers: {
-      ...buildAuthHeaders(memberId),
-      'Content-Type': 'application/json',
-    },
+    headers: buildSessionHeaders(sessionCookie, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({}),
   });
 
@@ -952,12 +978,11 @@ test('POST /api/checkout/session accepts non-memberstack subject id from JWT', a
 
 test('POST /api/checkout/session creates payment checkout session with client_reference_id', async () => {
   const memberId = 'mem_test_123';
+  const { sessionCookie } = await exchangeSupabaseSession(memberId);
+
   const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
     method: 'POST',
-    headers: {
-      ...buildAuthHeaders(memberId),
-      'Content-Type': 'application/json',
-    },
+    headers: buildSessionHeaders(sessionCookie, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({}),
   });
 
@@ -976,12 +1001,11 @@ test('POST /api/checkout/session creates payment checkout session with client_re
 
 test('POST /api/checkout/session binds client_reference_id to JWT sub even when body has user_id', async () => {
   const memberId = 'jwt-sub-user';
+  const { sessionCookie } = await exchangeSupabaseSession(memberId);
+
   const res = await mf.dispatchFetch('http://localhost/api/checkout/session', {
     method: 'POST',
-    headers: {
-      ...buildAuthHeaders(memberId),
-      'Content-Type': 'application/json',
-    },
+    headers: buildSessionHeaders(sessionCookie, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ user_id: 'tampered-user-id' }),
   });
 
@@ -2611,8 +2635,10 @@ test('GET /api/thread/state returns encrypted last_message when message exists',
 
 
 test('GET /api/paid returns false when unpaid', async () => {
+  const { sessionCookie } = await exchangeSupabaseSession(MEMBER_ID);
+
   const res = await mf.dispatchFetch('http://localhost/api/paid', {
-    headers: buildAuthHeaders(MEMBER_ID),
+    headers: buildSessionHeaders(sessionCookie),
   });
 
   assert.equal(res.status, 200);
@@ -2622,9 +2648,11 @@ test('GET /api/paid returns false when unpaid', async () => {
 });
 
 test('POST /api/run/start returns 403 when unpaid', async () => {
+  const { sessionCookie } = await exchangeSupabaseSession(MEMBER_ID);
+
   const res = await mf.dispatchFetch('http://localhost/api/run/start', {
     method: 'POST',
-    headers: buildAuthHeaders(MEMBER_ID),
+    headers: buildSessionHeaders(sessionCookie),
   });
 
   assert.equal(res.status, 403);
@@ -2639,9 +2667,11 @@ test('POST /api/run/start succeeds when paid', async () => {
     .bind(MEMBER_ID)
     .run();
 
+  const { sessionCookie } = await exchangeSupabaseSession(MEMBER_ID);
+
   const res = await mf.dispatchFetch('http://localhost/api/run/start', {
     method: 'POST',
-    headers: buildAuthHeaders(MEMBER_ID),
+    headers: buildSessionHeaders(sessionCookie),
   });
 
   assert.equal(res.status, 200);
@@ -2848,6 +2878,8 @@ test('POST /api/stripe/webhook rejects invalid signature', async () => {
 test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> close', async () => {
   stripeSessionStatus = 'paid';
 
+  const { sessionCookie } = await exchangeSupabaseSession(MEMBER_ID);
+
   const ts = Math.floor(Date.now() / 1000);
   const payload = JSON.stringify({
     id: 'evt_main_flow',
@@ -2872,7 +2904,7 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
 
   const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
     method: 'POST',
-    headers: buildAuthHeaders(MEMBER_ID),
+    headers: buildSessionHeaders(sessionCookie),
   });
 
   assert.equal(runRes.status, 200);
@@ -2881,7 +2913,7 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
 
   const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
     method: 'POST',
-    headers: buildAuthHeaders(MEMBER_ID),
+    headers: buildSessionHeaders(sessionCookie),
   });
 
   assert.equal(threadStartRes.status, 200);
@@ -2890,10 +2922,7 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
 
   const messageRes = await mf.dispatchFetch('http://localhost/api/thread/chat', {
     method: 'POST',
-    headers: {
-      ...buildAuthHeaders(MEMBER_ID),
-      'Content-Type': 'application/json',
-    },
+    headers: buildSessionHeaders(sessionCookie, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ message: 'hello' }),
   });
 
@@ -2904,10 +2933,7 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
 
   const saveRes = await mf.dispatchFetch('http://localhost/api/thread/message', {
     method: 'POST',
-    headers: {
-      ...buildAuthHeaders(MEMBER_ID),
-      'Content-Type': 'application/json',
-    },
+    headers: buildSessionHeaders(sessionCookie, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       thread_id: threadStartBody.thread.id,
       role: 'user',
@@ -2928,7 +2954,7 @@ test('main flow: webhook -> paid -> run -> thread -> chat -> encrypted save -> c
 
   const closeRes = await mf.dispatchFetch('http://localhost/api/thread/close', {
     method: 'POST',
-    headers: buildAuthHeaders(MEMBER_ID),
+    headers: buildSessionHeaders(sessionCookie),
   });
 
   assert.equal(closeRes.status, 200);
