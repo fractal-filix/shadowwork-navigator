@@ -1635,6 +1635,14 @@ test('POST /api/thread/chat embeds the query, searches Qdrant, and injects top c
   assert.equal(qdrantSearchRequestCount, 1);
   assert.deepEqual(lastQdrantSearchRequestJson?.vector, [0.1, 0.2, 0.3]);
   assert.equal(lastQdrantSearchRequestJson?.limit, 3);
+  assert.deepEqual(lastQdrantSearchRequestJson?.filter, {
+    must: [
+      {
+        key: 'user_id',
+        match: { value: MEMBER_ID },
+      },
+    ],
+  });
   assert.ok(lastOpenAiResponsesRequestJson);
 
   const input = lastOpenAiResponsesRequestJson.input;

@@ -125,7 +125,7 @@ function buildRagContextPrompt(chunks: string[]): string | null {
   return ['関連チャンク:', ...lines, '上記を参考情報として扱い、断定しすぎず日本語で応答してください。'].join('\n');
 }
 
-async function lookupRagContext(env: Env, userText: string): Promise<string[]> {
+async function lookupRagContext(env: Env, userId: string, userText: string): Promise<string[]> {
   const vectors = await createEmbeddings(env, [userText]);
   const queryVector = vectors[0];
   if (!Array.isArray(queryVector) || queryVector.length === 0) {
@@ -135,6 +135,16 @@ async function lookupRagContext(env: Env, userText: string): Promise<string[]> {
   const hits = await qdrantSearch(env, {
     vector: queryVector,
     limit: RAG_CONTEXT_LIMIT,
+    filter: {
+      must: [
+        {
+          key: 'user_id',
+          match: {
+            value: userId,
+          },
+        },
+      ],
+    },
     withPayload: true,
     withVector: false,
   });
@@ -214,7 +224,7 @@ export async function threadChatHandler({ request, env, url }: ThreadChatHandler
 
   let ragContextPrompt: string | null = null;
   try {
-    ragContextPrompt = buildRagContextPrompt(await lookupRagContext(env, content));
+    ragContextPrompt = buildRagContextPrompt(await lookupRagContext(env, user_id, content));
   } catch {
     return errorResponse('INTERNAL_ERROR', 'RAG context lookup failed', 502);
   }
