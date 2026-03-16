@@ -13,6 +13,10 @@
 - release-readiness: リリース当日のチェックリストと最終スモーク
 
 想定ファイル:
-- test_plan.md
+- [test_plan.md](test_plan.md)
 - test_cases.md
 - test_results.md
+
+現在:
+- 結合テスト計画は [test_plan.md](test_plan.md) に記載
+
