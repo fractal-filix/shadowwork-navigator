@@ -1,6 +1,6 @@
 # 2026.03.15 Runbook（βリリースチェックリスト）
 
-このドキュメントは `docs/sprints/sprint1/task.md` の **2026.03.15 / 10.4** に対応する、βリリース当日の確認手順です。
+このドキュメントは [../implementation/task.md](../implementation/task.md) の **2026.03.15 / 10.4** に対応する、βリリース当日の確認手順です。
 
 対象:
 - Workers

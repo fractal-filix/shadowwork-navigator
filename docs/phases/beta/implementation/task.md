@@ -3,7 +3,7 @@
 作成日: 2026-02-28
 
 - 合計: 237pt
-- 対象: docs/sprint-plan.md の（0pt除外）
+- 対象: β版 implementation の実装タスク（0pt除外）
 - 日割りの考え方: 2026/03/01〜03/15 の15日で均等割り（237/15=15.8 → 切り上げ16pt/日）し、累計閾値（16, 32, 48...）を超えるタスクは前日側に残す（前詰め）。
 
 > 注: 本ファイルは「日付＝実行順」で並べる（依存関係で前後しない）前提。
@@ -25,11 +25,11 @@
 - [-] 1.5.1.8 staging に ADMIN_MEMBER_IDS を登録（secret list 棚卸しで未登録）（1pt）※Memberstack廃止予定のため実行スキップ（記録のみ）。 2.2（MEMBERSTACK_* 撤去）で回収予定
 - [x] 1.6.2 D1（staging/production）の binding が DB であることを確認（wrangler.toml）（1pt）
 - [x] 1.7.2 Webhook が https://api.shadowwork-navigator.com/api/stripe/webhook に向いていることを確認（1pt）
-	- 手順: docs/sprints/sprint1/runbook_20260302.md
+	- 手順: runbook_20260302.md
 	- 実装側の根拠: apps/api/src/worker.ts で `POST /api/stripe/webhook` をルーティング済み
 	- 到達性: `curl --ssl-no-revoke -i -X POST https://api.shadowwork-navigator.com/api/stripe/webhook` で 400（missing Stripe-Signature）を確認
 - [x] 1.7.3 STRIPE_WEBHOOK_SECRET がWorkers Secretsに登録済みであることを確認（1pt）
-	- 手順: docs/sprints/sprint1/runbook_20260302.md
+	- 手順: runbook_20260302.md
 - [x] 1.1.1 Supabaseアカウント作成（1pt）
 - [x] 1.1.2 Project作成（リージョン/プラン決定）（2pt）
 - [x] 1.1.3 Auth有効化（Email+Password）（2pt）
@@ -40,7 +40,7 @@
 - [x] 1.1.6 API側でトークン検証に必要な情報を取得・保管（3pt）
     - SUPABASE_URL検証用スクリプト：apps\api\scripts\verify-jwt.mjs ※JWTの署名等を検証する中でurlも検証
 - [x] 1.1.6.1 SUPABASE_URL を取得（1pt）
-	- 手順: docs/sprints/sprint1/runbook_20260302.md
+	- 手順: runbook_20260302.md
 
 ## 2026.03.03
 - [x] 1.1.6.2 SUPABASE_ANON_KEY を取得（1pt）
@@ -56,31 +56,31 @@
 - [x] 1.5.2.2 API Base URL（本番: https://api.shadowwork-navigator.com）を登録（1pt）
 	- `apps/web/pages/lib/client.js` の既定値を維持、`apps/web/README.md` に反映手順を追記
 - [x] 1.6.1 Workers（staging/production）のVars/Secrets反映を確認（2pt）
-	- 確認手順を `docs/sprints/sprint1/runbook_20260302.md` に追記（実環境での `wrangler secret list` 実行は未実施）
+	- 確認手順を `runbook_20260302.md` に追記（実環境での `wrangler secret list` 実行は未実施）
 
 ## 2026.03.04
 - [x] 1.2.1 AWSアカウントが無ければ作成（課金/権限/監査の前提）（2pt）
 - [x] 1.2.2 KMSの非対称鍵ペアを作成（用途: ENCRYPT_DECRYPT）（4pt）
-	- 手順: docs/sprints/sprint1/runbook_20260304.md
+	- 手順: runbook_20260304.md
 - [x] 1.2.3 公開鍵取得（GetPublicKey）と kid（鍵識別子）運用を確定（3pt）
-	- 手順: docs/sprints/sprint1/runbook_20260304.md
+	- 手順: runbook_20260304.md
 	- kid（暫定案）: KMS KeyId を `kid` として扱う（運用を単純化）
 - [x] 1.2.4 CloudTrailを有効化（KMS操作の監査ログ）（2pt）
-	- 手順: docs/sprints/sprint1/runbook_20260304.md
+	- 手順: runbook_20260304.md
 - [x] 1.2.5 IAMポリシーを作成（4pt）
-	- 雛形: docs/sprints/sprint1/aws/iam/kms_get_public_key_policy.json
-	- 手順: docs/sprints/sprint1/runbook_20260304.md
+	- 雛形: ../aws/iam/kms_get_public_key_policy.json
+	- 手順: runbook_20260304.md
 - [x] 1.2.5.1 公開鍵取得（GetPublicKey）の許可主体を確定（2pt）
 	- 結論（まずの案）: Workers 実行主体の AWS 資格情報のみ許可（一般ユーザー/開発者個人は原則不可）
-	- 手順: docs/sprints/sprint1/runbook_20260304.md
+	- 手順: runbook_20260304.md
 
 ## 2026.03.05
 - [x] 1.2.5.2 管理者用アンラップ（Decrypt）の許可主体を確定（3pt）
-	- 手順: docs/sprints/sprint1/runbook_20260305.md
+	- 手順: runbook_20260305.md
 	- 結論: GetPublicKey と Decrypt の許可主体（Role）を分離
-	- 雛形: docs/sprints/sprint1/aws/iam/kms_decrypt_admin_policy.json, kms_decrypt_workers_policy.json, kms_decrypt_workers_trust_policy.json
+	- 雛形: ../aws/iam/kms_decrypt_admin_policy.json, kms_decrypt_workers_policy.json, kms_decrypt_workers_trust_policy.json
 - [x] 1.3.1 Qdrantアカウント作成（Qdrant Cloud想定）（1pt）
-	- runbook: docs/sprints/sprint1/runbook_20260305_qdrant.md を参照し、アカウント/クラスタ/APIキー/コレクションを作成して下さい。
+	- runbook: runbook_20260305_qdrant.md を参照し、アカウント/クラスタ/APIキー/コレクションを作成して下さい。
 - [x] 1.3.2 Cluster作成（リージョン/プラン決定）（2pt）
 - [x] 1.3.3 API Key 発行（1pt）
 - [x] 1.3.4 Collection作成（embedding次元/距離関数）（3pt）
@@ -101,7 +101,7 @@
 	- 補足: Cloudflare Dashboard（Web UI）で目視確認し、secret 名の先頭スペースは無し（CLI出力上の見え方による誤認としてクローズ）。
 
 - [x] 1.6.3 DDLの適用手順を確立（3pt）
-	- 手順書: `docs/sprints/sprint1/runbook_20260306.md`
+	- 手順書: `runbook_20260306.md`
 	- 実施（2026-03-08）: pre-release 前提で staging/production を破壊的再作成し、`database/DDL.sql` を `--remote` で適用
 - [x] 1.6.3.1 開発環境: apps/api/scripts/recreate-d1.ps1 でD1再作成＋DDL適用（破壊的なので開発のみ）（2pt）
 	- 実行コマンドと確認コマンドを runbook に固定化
@@ -158,7 +158,7 @@
 
 ## 2026.03.13
 - [x] 7.1 Qdrant: 環境（Qdrant Cloud等）を確定、APIキー/TLSで接続（3pt）
-	- runbook: `docs/sprints/sprint1/runbook_20260313.md`
+	- runbook: `runbook_20260313.md`
 	- 実装: `apps/api/scripts/verify-qdrant.mjs` / `pnpm run verify:qdrant` を追加
 	- 実施結果: `Qdrant connectivity check: OK` / `tls: https` / `collections: 2` を確認（endpointは秘匿）
 - [x] 7.2 API: Qdrantクライアント実装（upsert/searchの最小）（5pt）
@@ -180,4 +180,4 @@
 - [x] 10.2 API: Rate limit / abuse対策（最低限）（4pt）
 - [x] 10.3 tests: integrationテストをSupabase/新契約に追従（4pt）
 - [x] 10.4 チェックリスト: βリリース手順（Workers/Pages/env/Stripe webhook/Qdrant/KMS）（3pt）
-	- 手順書: `docs/sprints/sprint1/runbook_20260315_beta_release.md`
+	- 手順書: `../release-readiness/runbook_20260315_beta_release.md`
