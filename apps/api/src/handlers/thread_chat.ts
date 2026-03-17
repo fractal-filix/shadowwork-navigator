@@ -5,32 +5,17 @@ import { getActiveRun, getActiveThread, formatThread } from "../lib/run.js";
 import { authenticateRequest } from '../lib/auth.js';
 import { getUserPaidFlag } from '../lib/paid.js';
 import { extractOutputText, getOpenAiModel } from '../lib/llm.js';
+import {
+  buildThreadChatNextActionReply,
+  buildThreadChatRagContextPrompt,
+  buildThreadChatSystemPrompt,
+} from '../lib/prompts.js';
 import { fetchExternalApi } from '../lib/external_api.js';
 import { createEmbeddings } from '../lib/embeddings.js';
 import { qdrantSearch } from '../lib/qdrant.js';
 
 const MAX_MESSAGE_LENGTH = 2000;
 const RAG_CONTEXT_LIMIT = 3;
-
-function buildSystemPrompt(step: number, questionNo?: number | null, sessionNo?: number | null): string {
-  if (Number(step) === 1) {
-    return `あなたはシャドーワークのガイドです。ユーザーの回答を受けて、Q${questionNo ?? ''}について具体例を1つだけ短く促してください。日本語で2文以内。`;
-  }
-  if (Number(step) === 2) {
-    return `あなたはシャドーワークのガイドです。Session ${sessionNo ?? ''}で感情が強く出た瞬間を、状況→相手→自分の反応の順に書くよう短く促してください。日本語で2文以内。`;
-  }
-  return "あなたはシャドーワークのガイドです。ユーザーの回答を短く深掘りする質問を日本語で2文以内で返してください。";
-}
-
-function buildNextActionReply(step: number, questionNo: number | null, sessionNo: number | null): string {
-  if (Number(step) === 1) {
-    return `次へ進みます。Q${questionNo ?? ''}で出てきた感情の中で、いま最も強く残っているものを一つ書いてください。`;
-  }
-  if (Number(step) === 2) {
-    return `次へ進みます。Session ${sessionNo ?? ''}で最も強く反応した感情を一つ書いてください。`;
-  }
-  return '次へ進みます。いま最も強く残っている感情を一つ書いてください。';
-}
 
 async function generateAssistantReply(
   env: Env,
@@ -47,7 +32,7 @@ async function generateAssistantReply(
   const openAiBase = (env as Record<string, unknown>).OPENAI_API_BASE_URL as string | undefined;
   const openAiBaseUrl = openAiBase && openAiBase.trim() ? openAiBase.trim() : "https://api.openai.com";
   const input = [
-    { role: "system", content: buildSystemPrompt(step, questionNo, sessionNo) },
+    { role: "system", content: buildThreadChatSystemPrompt(step, questionNo, sessionNo) },
     ...(ragContextPrompt ? [{ role: 'system', content: ragContextPrompt }] : []),
     { role: "user", content: userText },
   ];
@@ -114,15 +99,6 @@ function extractRagChunkText(payload: Record<string, unknown> | undefined): stri
 
   const normalized = text.trim();
   return normalized ? normalized : null;
-}
-
-function buildRagContextPrompt(chunks: string[]): string | null {
-  if (chunks.length === 0) {
-    return null;
-  }
-
-  const lines = chunks.map((chunk, index) => `${index + 1}. ${chunk}`);
-  return ['関連チャンク:', ...lines, '上記を参考情報として扱い、断定しすぎず日本語で応答してください。'].join('\n');
 }
 
 async function lookupRagContext(env: Env, userId: string, userText: string): Promise<string[]> {
@@ -208,7 +184,7 @@ export async function threadChatHandler({ request, env, url }: ThreadChatHandler
       run: { id: run.id, run_no: run.run_no, status: run.status },
       thread: formatThread(thread)!,
       thread_id: thread.id,
-      reply: buildNextActionReply(thread.step, thread.question_no, thread.session_no),
+      reply: buildThreadChatNextActionReply(thread.step, thread.question_no, thread.session_no),
     };
     return json(response);
   }
@@ -224,7 +200,7 @@ export async function threadChatHandler({ request, env, url }: ThreadChatHandler
 
   let ragContextPrompt: string | null = null;
   try {
-    ragContextPrompt = buildRagContextPrompt(await lookupRagContext(env, user_id, content));
+    ragContextPrompt = buildThreadChatRagContextPrompt(await lookupRagContext(env, user_id, content));
   } catch {
     return errorResponse('INTERNAL_ERROR', 'RAG context lookup failed', 502);
   }

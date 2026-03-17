@@ -5,6 +5,7 @@ import { errorResponse, json, methodNotAllowed, badRequest, unauthorized, forbid
 import { authenticateRequest } from '../lib/auth.js';
 import { extractOutputText, getOpenAiModel } from '../lib/llm.js';
 import { getUserPaidFlag } from '../lib/paid.js';
+import { buildLlmRespondSystemPrompt } from '../lib/prompts.js';
 import { fetchExternalApi } from '../lib/external_api.js';
 import { logError } from '../lib/safe_log.js';
 
@@ -57,7 +58,7 @@ export async function llmRespondHandler({ request, env }: LlmRespondHandlerConte
     input: [
         {
             role: "system",
-            content: "あなたは簡潔に自己紹介や質問に答えるAIです。必ず日本語で、1文だけで答えてください。"
+            content: buildLlmRespondSystemPrompt()
         },
         {
             role: "user",

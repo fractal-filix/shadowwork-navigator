@@ -1,0 +1,50 @@
+# LLM固定プロンプト集約タスク
+
+作成日: 2026-03-17
+
+## 背景
+
+- OpenAI に渡す固定プロンプトが handler ごとに分散しており、修正箇所が追いづらい。
+- まず prompt の定義を一箇所へ集約し、その後に文面修正を安全に行える状態を作る。
+- 対象は API 側の固定プロンプトのみとし、OpenAI 呼び出し方式や Web 側 UI 文言は今回の対象外とする。
+
+## 対象
+
+- `apps/api/src/handlers/thread_chat.ts`
+  - step 別 system prompt
+  - next action reply
+  - RAG context prompt
+- `apps/api/src/handlers/llm_respond.ts`
+  - 汎用応答の fixed system prompt
+- `apps/api/src/handlers/llm_ping.ts`
+  - health check 用 prompt
+
+## 方針
+
+1. `apps/api/src/lib/prompts.ts` を source of truth とする。
+2. 各 handler の直書き prompt は削除し、共通モジュールを import する。
+3. まずは挙動互換を維持したまま集約する。
+4. 文面修正はこの集約後に同ファイルだけを触れば済む形にする。
+5. health check 用 prompt は一般の対話 prompt と用途が違うため、同一ファイル内でも明示的に分けて扱う。
+
+## 実装ステップ
+
+- [x] 固定プロンプトの所在を全体調査する
+- [x] 集約先を `apps/api/src/lib/prompts.ts` に決める
+- [x] `thread_chat` の prompt builder を移す
+- [x] `llm_respond` の fixed prompt を移す
+- [x] `llm_ping` の health check prompt を移す
+- [ ] 意図した最終文面に差し替える
+- [x] build と test で回帰確認する
+
+## 確認ポイント
+
+- `/api/thread/chat` の OpenAI input 構造が通常時 2件、RAG 時 3件のまま維持される
+- `RAG context` の文面と件数制御が変わらない
+- `/api/llm/respond` と `/api/llm/ping` が handler 直書きでなく共通 prompt を参照する
+- 次回の prompt 修正が `apps/api/src/lib/prompts.ts` のみで完結する
+
+## メモ
+
+- 現時点では仕様書に最終文面が明記されていないため、まずは集約を先に行う。
+- 文面修正時は integration test の期待値が文字列に依存していないか確認しながら進める。

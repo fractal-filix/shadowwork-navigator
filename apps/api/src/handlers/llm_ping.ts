@@ -5,6 +5,7 @@ import { errorResponse, json, methodNotAllowed, unauthorized, forbidden } from "
 import { authenticateRequest } from '../lib/auth.js';
 import { extractOutputText, getOpenAiModel } from '../lib/llm.js';
 import { getUserPaidFlag } from '../lib/paid.js';
+import { buildLlmPingInput } from '../lib/prompts.js';
 import { fetchExternalApi } from '../lib/external_api.js';
 import { logError } from '../lib/safe_log.js';
 
@@ -36,7 +37,7 @@ export async function llmPingHandler({ request, env }: LlmPingHandlerContext): P
 
   const payload = {
     model,
-    input: "Reply with exactly: pong"
+    input: buildLlmPingInput()
   };
 
   const openAiBase = (env as Record<string, unknown>).OPENAI_API_BASE_URL as string | undefined;
