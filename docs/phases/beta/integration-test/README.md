@@ -14,9 +14,10 @@
 
 想定ファイル:
 - [test_plan.md](test_plan.md)
-- test_cases.md
+- [test_cases.md](test_cases.md)
 - test_results.md
 
 現在:
 - 結合テスト計画は [test_plan.md](test_plan.md) に記載
+- 詳細手順は [test_cases.md](test_cases.md) に記載
 
