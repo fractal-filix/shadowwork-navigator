@@ -22,6 +22,8 @@ export const SHADOWWORK_PROGRESS_RULES = [
   'ユーザーの回答を踏まえ、同じ論点を繰り返しすぎないこと。',
 ] as const;
 
+export const SHADOWWORK_STEP2_SESSION_OPENER = '今日一番強く反応した感情はなんですか？';
+
 function getStep1Question(questionNo: number | null | undefined): string {
   if (!Number.isInteger(questionNo)) {
     throw new Error('invalid thread prompt state: question_no is required for step 1');
@@ -41,6 +43,22 @@ function getStep2Session(sessionNo: number | null | undefined): number {
   }
 
   return Number(sessionNo);
+}
+
+export function buildThreadStartOpener(
+  step: number,
+  questionNo?: number | null,
+  sessionNo?: number | null,
+): string {
+  if (Number(step) === 1) {
+    const currentQuestion = getStep1Question(questionNo);
+    return `Q${questionNo}: ${currentQuestion}`;
+  }
+  if (Number(step) === 2) {
+    getStep2Session(sessionNo);
+    return SHADOWWORK_STEP2_SESSION_OPENER;
+  }
+  throw new Error(`invalid thread prompt state: unsupported step ${step}`);
 }
 
 export function buildThreadChatSystemPrompt(
