@@ -16,11 +16,13 @@ export const SHADOWWORK_STEP2_JOURNAL_FLOW = [
 
 export const SHADOWWORK_PROGRESS_RULES = [
   '①〜④を一発で出力せず、ユーザーがついていけるように、ユーザーに質問して回答を引き出しながら、一歩ずつ進めること。',
-  'ユーザーが②の理由を一つ書いたら、一つ下の下層にどんな信念があるか深掘りするための質問やヒントをユーザーに投げかける。',
+  'ユーザーが②の理由を一つ書いたら、一つ下の下層にどんな信念があるか深掘りするための質問やヒントをユーザーに投げかけること。',
   '十分に深掘りできてから③へ進み、③が十分に進んでから④へ進むこと。',
   'ユーザー自身が一歩一歩内省を深めていけるようにサポートすること。',
   'ユーザーの回答を踏まえ、同じ論点を繰り返しすぎないこと。',
 ] as const;
+
+export const SHADOWWORK_STEP2_SESSION_OPENER = '今日一番強く反応した感情はなんですか？';
 
 function getStep1Question(questionNo: number | null | undefined): string {
   if (!Number.isInteger(questionNo)) {
@@ -41,6 +43,22 @@ function getStep2Session(sessionNo: number | null | undefined): number {
   }
 
   return Number(sessionNo);
+}
+
+export function buildThreadStartOpener(
+  step: number,
+  questionNo?: number | null,
+  sessionNo?: number | null,
+): string {
+  if (Number(step) === 1) {
+    const currentQuestion = getStep1Question(questionNo);
+    return `Q${questionNo}: ${currentQuestion}`;
+  }
+  if (Number(step) === 2) {
+    getStep2Session(sessionNo);
+    return SHADOWWORK_STEP2_SESSION_OPENER;
+  }
+  throw new Error(`invalid thread prompt state: unsupported step ${step}`);
 }
 
 export function buildThreadChatSystemPrompt(

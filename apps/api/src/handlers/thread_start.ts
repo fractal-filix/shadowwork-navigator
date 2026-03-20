@@ -3,6 +3,7 @@ import type { Env } from '../types/env.js';
 import type { ThreadStartResponse } from '../types/api.js';
 import { json, badRequest, methodNotAllowed, unauthorized, forbidden } from "../lib/http.js";
 import { getActiveRun, getActiveThread, createNextThread, formatThread } from "../lib/run.js";
+import { buildThreadStartOpener } from '../lib/prompts.js';
 import { authenticateRequest } from '../lib/auth.js';
 import { getUserPaidFlag } from '../lib/paid.js';
 
@@ -38,7 +39,8 @@ export async function threadStartHandler({ request, env, url }: ThreadStartHandl
     const response: ThreadStartResponse = {
       ok: true,
       run: { id: run.id, run_no: run.run_no, status: run.status },
-      thread: formatThread(activeThread),
+      thread: formatThread(activeThread)!,
+      opener: null,
     };
     return json(response);
   }
@@ -62,7 +64,8 @@ export async function threadStartHandler({ request, env, url }: ThreadStartHandl
   const response: ThreadStartResponse = {
     ok: true,
     run: { id: run.id, run_no: run.run_no, status: run.status },
-    thread: formatThread(nextThread),
+    thread: formatThread(nextThread)!,
+    opener: buildThreadStartOpener(nextThread.step, nextThread.question_no, nextThread.session_no),
   };
   return json(response);
 }

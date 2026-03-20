@@ -315,6 +315,7 @@
       const data = await res.json().catch(() => ({}));
       dbg("[api] thread/start <-", data);
       if (!res.ok) throw new Error(data?.error || "thread/start failed");
+      // opener は app.html 側で「新規スレッド開始時のみ」表示するため、dashboard では描画しない。
       return data;
     }
 

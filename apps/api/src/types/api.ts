@@ -176,6 +176,7 @@ export interface EncryptedMessageDetail {
 export interface ThreadStartResponse extends SuccessResponse {
     run: RunSummary;
     thread: ThreadDetail;
+    opener?: string | null;
 }
 
 /**

@@ -49,4 +49,7 @@
 - 現時点では仕様書に最終文面が明記されていないため、まずは集約を先に行う。
 - 文面修正時は integration test の期待値が文字列に依存していないか確認しながら進める。
 - 2026-03-17: 元の ChatGPT プロジェクトの運用方針を反映し、shadowwork-navigator の `step1` を「初日の5質問」、`step2` を「二日目以降のジャーナル」として prompt に明示した。
-- 2026-03-17: 初日の5質問、二日目以降の進行 ①〜④、段階を飛ばさない運用ルールを `apps/api/src/lib/prompts.ts` の定数として保持する形に変更した。
+- 2026-03-17: 初日の5質問、二日目以降の進行 ①〜⑤、段階を飛ばさない運用ルールを `apps/api/src/lib/prompts.ts` の定数として保持する形に変更した。
+- 2026-03-20: `thread/start` の返却契約に `opener` を追加し、新規 thread 作成時のみ step に応じた開始文を返し、active thread 再利用時は `opener: null` を返す仕様にした。
+- 2026-03-20: Web 側は `app.html` で「新規 thread かつ履歴空」の場合のみ `opener` を AI 発話として表示するようにし、`dashboard.html` は開始処理に専念する責務分離を明記した。
+- 2026-03-20: 全体回帰（`pnpm -r --if-present test`）で Web 10件、API 97件、合計 107件がすべて pass を確認した。
