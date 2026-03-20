@@ -1847,7 +1847,7 @@ test('POST /api/thread/chat ignores legacy step2_meta_card on step2', async () =
   const hasMetaCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes(metaCard));
   assert.equal(hasMetaCard, false);
   assert.match(input[0]?.content, /①その日、最も強く反応した感情を書く/);
-  assert.match(input[0]?.content, /十分に深掘りできるまでは③や④へ進め/);
+  assert.match(input[0]?.content, /十分に深掘りできてから③へ進み、③が十分に進んでから④へ進む/);
 });
 
 test('POST /api/thread/chat action=next returns internal error when step1 question_no is unsupported', async () => {
@@ -2761,6 +2761,66 @@ test('POST /api/thread/start returns standardized bad request when run is comple
   assert.equal(typeof body.error?.message, 'string');
 });
 
+test('POST /api/thread/start returns opener for newly created step1 thread', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const body = await threadStartRes.json();
+
+  assert.equal(body.ok, true);
+  assert.equal(body.thread?.step, 1);
+  assert.equal(body.thread?.question_no, 1);
+  assert.equal(body.opener, 'Q1: 他人のどんなとこが嫌いか');
+});
+
+test('POST /api/thread/start returns step2 opener after step1 questions are completed', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+  const runBody = await runRes.json();
+  const runId = runBody?.run?.id;
+  assert.equal(typeof runId, 'string');
+
+  for (let i = 1; i <= 5; i += 1) {
+    await db
+      .prepare('INSERT INTO threads (id, run_id, user_id, step, question_no, session_no, status) VALUES (?, ?, ?, 1, ?, NULL, ? )')
+      .bind(crypto.randomUUID(), runId, MEMBER_ID, i, 'completed')
+      .run();
+  }
+
+  const threadStartRes = await mf.dispatchFetch('http://localhost/api/thread/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(threadStartRes.status, 200);
+  const body = await threadStartRes.json();
+
+  assert.equal(body.ok, true);
+  assert.equal(body.thread?.step, 2);
+  assert.equal(body.thread?.session_no, 1);
+  assert.equal(body.opener, '今日一番強く反応した感情はなんですか？');
+});
+
 test('POST /api/thread/start returns same active thread when called twice', async () => {
   await db
     .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
@@ -2790,6 +2850,8 @@ test('POST /api/thread/start returns same active thread when called twice', asyn
   assert.equal(secondBody.ok, true);
 
   assert.equal(secondBody.thread?.id, firstBody.thread?.id);
+  assert.equal(firstBody.opener, 'Q1: 他人のどんなとこが嫌いか');
+  assert.equal(secondBody.opener, null);
 });
 
 test('GET /api/thread/state returns null state when no run exists', async () => {
