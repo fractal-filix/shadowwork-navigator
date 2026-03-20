@@ -13,11 +13,13 @@
 - release-readiness: リリース当日のチェックリストと最終スモーク
 
 想定ファイル:
+- [staging_preflight_checklist.md](staging_preflight_checklist.md)
 - [test_plan.md](test_plan.md)
 - [test_cases.md](test_cases.md)
 - [test_results.md](test_results.md)
 
 現在:
+- staging 事前準備は [staging_preflight_checklist.md](staging_preflight_checklist.md) に記載
 - 結合テスト計画は [test_plan.md](test_plan.md) に記載
 - 詳細手順は [test_cases.md](test_cases.md) に記載
 - 実施結果は [test_results.md](test_results.md) に記録

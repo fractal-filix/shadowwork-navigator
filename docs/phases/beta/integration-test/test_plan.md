@@ -15,7 +15,7 @@
 - 実施環境: staging
 - 外部サービス: Supabase, Stripe, Qdrant, AWS KMS, OpenAI を実接続で確認する
 - 実施者: 主に開発者本人
-- 参照: [../implementation/task.md](../implementation/task.md), [../release-readiness/runbook_20260315_beta_release.md](../release-readiness/runbook_20260315_beta_release.md)
+- 参照: [staging_preflight_checklist.md](staging_preflight_checklist.md), [../implementation/task.md](../implementation/task.md), [../release-readiness/runbook_20260315_beta_release.md](../release-readiness/runbook_20260315_beta_release.md)
 
 ## 3. スコープ
 
@@ -170,7 +170,9 @@
 
 - [ ] [../implementation/task.md](../implementation/task.md) の implementation 完了状態を確認
 - [ ] [../release-readiness/runbook_20260315_beta_release.md](../release-readiness/runbook_20260315_beta_release.md) の事前確認項目と矛盾がない
+- [ ] [staging_preflight_checklist.md](staging_preflight_checklist.md) の確認対象が埋まっている
 - [ ] staging の secrets / vars / D1 / 外部サービス設定が最新
 - [ ] β検証用ユーザーを使える
 - [ ] 必要な外部管理画面へログインできる
+
 
