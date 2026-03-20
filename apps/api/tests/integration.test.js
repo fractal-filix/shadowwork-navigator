@@ -1674,6 +1674,7 @@ test('POST /api/thread/chat sends only system prompt and user message to OpenAI'
   assert.ok(Array.isArray(input));
   assert.equal(input.length, 2);
   assert.equal(input[0]?.role, 'system');
+  assert.match(input[0]?.content, /Q1\. 他人のどんなとこが嫌いか/);
   assert.equal(input[1]?.role, 'user');
   assert.equal(input[1]?.content, 'hello');
 });
@@ -1748,6 +1749,7 @@ test('POST /api/thread/chat embeds the query, searches Qdrant, and injects top c
   assert.ok(Array.isArray(input));
   assert.equal(input.length, 3);
   assert.equal(input[0]?.role, 'system');
+  assert.match(input[0]?.content, /Q1\. 他人のどんなとこが嫌いか/);
   assert.equal(input[1]?.role, 'system');
   assert.match(input[1]?.content, /関連チャンク/);
   assert.match(input[1]?.content, /最上位チャンク/);
@@ -1844,6 +1846,48 @@ test('POST /api/thread/chat ignores legacy step2_meta_card on step2', async () =
   assert.ok(Array.isArray(input));
   const hasMetaCard = input.some((item) => item.role === 'system' && typeof item.content === 'string' && item.content.includes(metaCard));
   assert.equal(hasMetaCard, false);
+  assert.match(input[0]?.content, /①その日、最も強く反応した感情を書く/);
+  assert.match(input[0]?.content, /十分に深掘りできるまでは③や④へ進め/);
+});
+
+test('POST /api/thread/chat action=next returns internal error when step1 question_no is unsupported', async () => {
+  await db
+    .prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)')
+    .bind(MEMBER_ID)
+    .run();
+
+  const runRes = await mf.dispatchFetch('http://localhost/api/run/start', {
+    method: 'POST',
+    headers: buildAuthHeaders(MEMBER_ID),
+  });
+  assert.equal(runRes.status, 200);
+  const runBody = await runRes.json();
+  const runId = runBody.run?.id;
+  assert.equal(typeof runId, 'string');
+
+  await db
+    .prepare('INSERT INTO threads (id, run_id, user_id, step, question_no, session_no, status) VALUES (?, ?, ?, 1, ?, NULL, ?)')
+    .bind('thread-invalid-q-active-1', runId, MEMBER_ID, 6, 'active')
+    .run();
+
+  const res = await mf.dispatchFetch('http://localhost/api/thread/chat', {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders(MEMBER_ID),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action: 'next' }),
+  });
+
+  assert.equal(res.status, 500);
+  const body = await res.json();
+  assert.deepEqual(body, {
+    ok: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'invalid thread prompt state',
+    },
+  });
 });
 
 test('POST /api/thread/message persists encrypted payload and GET /api/thread/messages returns encrypted fields', async () => {

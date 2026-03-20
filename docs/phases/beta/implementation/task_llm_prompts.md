@@ -34,7 +34,7 @@
 - [x] `thread_chat` の prompt builder を移す
 - [x] `llm_respond` の fixed prompt を移す
 - [x] `llm_ping` の health check prompt を移す
-- [ ] 意図した最終文面に差し替える
+- [x] 意図した最終文面に差し替える
 - [x] build と test で回帰確認する
 
 ## 確認ポイント
@@ -48,3 +48,5 @@
 
 - 現時点では仕様書に最終文面が明記されていないため、まずは集約を先に行う。
 - 文面修正時は integration test の期待値が文字列に依存していないか確認しながら進める。
+- 2026-03-17: 元の ChatGPT プロジェクトの運用方針を反映し、shadowwork-navigator の `step1` を「初日の5質問」、`step2` を「二日目以降のジャーナル」として prompt に明示した。
+- 2026-03-17: 初日の5質問、二日目以降の進行 ①〜④、段階を飛ばさない運用ルールを `apps/api/src/lib/prompts.ts` の定数として保持する形に変更した。

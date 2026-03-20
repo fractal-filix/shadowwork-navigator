@@ -31,11 +31,19 @@ async function generateAssistantReply(
   const model = getOpenAiModel(env);
   const openAiBase = (env as Record<string, unknown>).OPENAI_API_BASE_URL as string | undefined;
   const openAiBaseUrl = openAiBase && openAiBase.trim() ? openAiBase.trim() : "https://api.openai.com";
-  const input = [
-    { role: "system", content: buildThreadChatSystemPrompt(step, questionNo, sessionNo) },
-    ...(ragContextPrompt ? [{ role: 'system', content: ragContextPrompt }] : []),
-    { role: "user", content: userText },
-  ];
+  let input;
+  try {
+    input = [
+      { role: "system", content: buildThreadChatSystemPrompt(step, questionNo, sessionNo) },
+      ...(ragContextPrompt ? [{ role: 'system', content: ragContextPrompt }] : []),
+      { role: "user", content: userText },
+    ];
+  } catch {
+    return {
+      ok: false,
+      response: errorResponse('INTERNAL_ERROR', 'invalid thread prompt state', 500),
+    };
+  }
   const payload = {
     model,
     input,
@@ -179,12 +187,19 @@ export async function threadChatHandler({ request, env, url }: ThreadChatHandler
   }
 
   if (action === 'next') {
+    let reply: string;
+    try {
+      reply = buildThreadChatNextActionReply(thread.step, thread.question_no, thread.session_no);
+    } catch {
+      return errorResponse('INTERNAL_ERROR', 'invalid thread prompt state', 500);
+    }
+
     const response: ThreadMessageResponse = {
       ok: true,
       run: { id: run.id, run_no: run.run_no, status: run.status },
       thread: formatThread(thread)!,
       thread_id: thread.id,
-      reply: buildThreadChatNextActionReply(thread.step, thread.question_no, thread.session_no),
+      reply,
     };
     return json(response);
   }
