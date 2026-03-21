@@ -1,0 +1,28 @@
+name: Feature Request
+description: 機能追加や改善を提案する
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 追加したい機能や改善内容を記載してください。
+      placeholder: "例: staging 事前確認を自動化するスモークテストを追加したい"
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+      description: なぜ必要かを記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容
+      description: 想定している実現方法や範囲を記載してください。
+    validations:
+      required: true

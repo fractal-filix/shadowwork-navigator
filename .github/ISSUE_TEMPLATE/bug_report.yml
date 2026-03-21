@@ -1,0 +1,39 @@
+name: Bug Report
+description: 不具合を報告する
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何が起きているかを簡潔に記載してください。
+      placeholder: "例: staging のトップページでログイン初期化に失敗する"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 再現できる手順を記載してください。
+      placeholder: |
+        1. xxx を開く
+        2. yyy を実行する
+        3. zzz が表示される
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する結果
+      description: 本来どうなるべきかを記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の結果
+      description: 実際に起きたことを記載してください。
+    validations:
+      required: true
