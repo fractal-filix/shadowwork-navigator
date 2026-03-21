@@ -52,6 +52,33 @@ export async function apiPaid() {
   return !!data.paid;
 }
 
+export async function ensureApiSessionCookie() {
+  const client = createSupabaseClient();
+  if (!client) return false;
+
+  const sessionResult = await client.auth.getSession();
+  const accessToken = sessionResult?.data?.session?.access_token;
+  const token = typeof accessToken === "string" ? accessToken.trim() : "";
+  if (!token) return false;
+
+  const url = `${API_BASE}/api/auth/exchange`;
+  dbg("[api] auth/exchange ->", url);
+
+  const res = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const data = await res.json().catch(() => ({}));
+
+  dbg("[api] auth/exchange <-", data);
+  if (!res.ok || data.ok === false) {
+    throw new Error(data?.error?.message || data?.error || "auth exchange failed");
+  }
+  return true;
+}
+
 export function createSupabaseClient() {
   try {
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return null;

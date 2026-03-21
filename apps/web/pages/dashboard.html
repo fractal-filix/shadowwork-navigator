@@ -240,6 +240,7 @@
       dbg,
       dbgErr,
       apiPaid,
+      ensureApiSessionCookie,
       getSupabaseUser
     } from "/lib/client.js";
     import { decryptThreadMessages } from "/lib/thread_messages.js";
@@ -451,6 +452,8 @@
       memberLine.innerHTML = `ログイン済み：<code>${userId}</code>`;
 
       try {
+        await ensureApiSessionCookie();
+
         // 3) paid required
         const isPaid = await apiPaid();
         if (!isPaid) {

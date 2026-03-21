@@ -168,6 +168,7 @@
     import {
       getSupabaseUser,
       hasSupabaseConfig,
+      ensureApiSessionCookie,
       signInWithPassword,
       signOutSupabase,
     } from "/lib/client.js";
@@ -209,6 +210,7 @@
 
       try {
         await signInWithPassword($email.value.trim(), $password.value);
+        await ensureApiSessionCookie();
         $password.value = "";
         await refreshAuthState();
       } catch (error) {
