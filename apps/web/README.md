@@ -2,6 +2,7 @@
 
 - 既定の API Base URL は `https://api.shadowwork-navigator.com` です（`pages/lib/client.js`）。
 - Supabase クライアント設定は `SHADOWNAV_SUPABASE_URL` / `SHADOWNAV_SUPABASE_PUBLISHABLE_KEY` から読み取れます（`pages/lib/client.js`）。
+- Cloudflare Pages で設定した値は `functions/runtime-config.js.ts` から `globalThis` に注入されます。
 - すべての API 呼び出しは `credentials: "include"` を付与して Cookie を送受信します。
 - 一時的に API Base URL を上書きしたい場合は、ブラウザ Console で以下を実行してリロードします。
 
