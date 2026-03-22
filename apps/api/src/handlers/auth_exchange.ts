@@ -57,7 +57,7 @@ export async function authExchangeHandler({ request, env }: AuthExchangeContext)
   if (!env.SUPABASE_AUDIENCE) missing.push('SUPABASE_AUDIENCE');
 
   if (missing.length) {
-    return internalError('missing env vars', { missing });
+    return internalError(`missing env vars: ${missing.join(', ')}`, { missing });
   }
 
   // リクエストボディを取得
