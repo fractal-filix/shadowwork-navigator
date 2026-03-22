@@ -4,7 +4,7 @@ compatibility_date = "2026-01-02"
 
 [env.staging.vars]
 APP_ENV = "staging"
-ALLOWED_ORIGINS = "https://shadowwork-navigator.com"
+ALLOWED_ORIGINS = "https://web-staging.shadowwork-navigator.com"
 JWT_ISSUER = "shadowwork-navigator-api"
 JWT_AUDIENCE = "shadowwork-navigator-web"
 ACCESS_TOKEN_TTL_SECONDS = "900"

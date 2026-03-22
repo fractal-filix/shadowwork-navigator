@@ -20,7 +20,10 @@
 - Cloudflare Workers の staging 環境設定
 
 注意:
-- 現状の `ALLOWED_ORIGINS` は本番 origin 前提のため、staging のブラウザ結合テストで使う origin と一致するか先に確認する
+- staging のブラウザ結合テストは固定 origin（`https://web-staging.shadowwork-navigator.com`）を入口にする
+- `ALLOWED_ORIGINS` は上記固定 origin のみに合わせる
+- preview URL（`*.pages.dev`）は結合テスト入口として使わない
+- どうしても preview URL を使う場合は一時運用とし、対象の origin 1件だけを allowlist に追加する（ワイルドカード禁止）
 
 ## 2. D1 staging
 

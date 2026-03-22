@@ -49,6 +49,11 @@ CORS/Cookie 運用の必須設定
 - CORS は許可 Origin をエコーし、`Access-Control-Allow-Credentials: true` を返す。
 - `/api/auth/exchange` の `Set-Cookie` は `HttpOnly; Secure; SameSite=Strict; Path=/` を維持する。
 
+staging の固定origin運用
+- staging のブラウザ結合テストは `https://web-staging.shadowwork-navigator.com` を入口に固定する。
+- `ALLOWED_ORIGINS`（staging）は `https://web-staging.shadowwork-navigator.com` のみを設定する。
+- preview URL（`*.pages.dev`）は結合テスト入口として使わない。
+
 棚卸し手順（Workers: staging / production）
 -------------------------------------------
 
