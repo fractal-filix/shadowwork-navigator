@@ -737,6 +737,38 @@ test('POST /api/auth/exchange returns standardized error for invalid json', asyn
   assert.equal(typeof body.error?.message, 'string');
 });
 
+test('POST /api/auth/exchange includes missing env var names in error message and details', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-auth-exchange-missing-env' },
+    bindings: {
+      ...buildEnvBindings(),
+      JWT_SIGNING_SECRET: '',
+      SUPABASE_JWKS_URL: '',
+    },
+  });
+
+  try {
+    const res = await localMf.dispatchFetch('http://localhost/api/auth/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: createSupabaseAccessToken('mem_test_auth') }),
+    });
+
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'INTERNAL_ERROR');
+    assert.match(body.error?.message || '', /JWT_SIGNING_SECRET/);
+    assert.match(body.error?.message || '', /SUPABASE_JWKS_URL/);
+    assert.deepEqual(body.error?.details?.missing, ['JWT_SIGNING_SECRET', 'SUPABASE_JWKS_URL']);
+  } finally {
+    await localMf.dispose();
+  }
+});
+
 test('POST /api/auth/exchange succeeds and sets JWT cookie', async () => {
   const supabaseToken = createSupabaseAccessToken('mem_test_auth');
   const res = await mf.dispatchFetch('http://localhost/api/auth/exchange', {
