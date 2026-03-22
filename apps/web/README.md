@@ -11,6 +11,13 @@ localStorage.setItem("SHADOWNAV_API_BASE", "https://api.shadowwork-navigator.com
 location.reload();
 ```
 
+- staging 固定origin（`https://web-staging.shadowwork-navigator.com`）で結合テストする場合:
+
+```js
+localStorage.setItem("SHADOWNAV_API_BASE", "https://api-staging.shadowwork-navigator.com");
+location.reload();
+```
+
 - Supabase 設定をブラウザで一時的に上書きする場合:
 
 ```js
