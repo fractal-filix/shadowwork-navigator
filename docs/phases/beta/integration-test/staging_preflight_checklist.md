@@ -27,7 +27,7 @@
 
 ## 2. D1 staging
 
-- [ ] staging D1 binding が `DB` を向いている
+- [x] staging D1 binding が `DB` を向いている
 - [ ] staging D1 データベースが存在する
 - [ ] 必須テーブルが存在する
 - [ ] `messages` テーブルが存在する
