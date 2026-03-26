@@ -29,11 +29,11 @@
 
 - [x] staging D1 binding が `DB` を向いている
 - [x] staging D1 データベースが存在する
-- [ ] 必須テーブルが存在する
-- [ ] `messages` テーブルが存在する
-- [ ] `decrypt_audit_logs` テーブルが存在する
-- [ ] `stripe_webhook_events` テーブルが存在する
-- [ ] `user_flags` テーブルが存在する
+- [x] 必須テーブルが存在する
+- [x] `messages` テーブルが存在する
+- [x] `decrypt_audit_logs` テーブルが存在する
+- [x] `stripe_webhook_events` テーブルが存在する
+- [x] `user_flags` テーブルが存在する
 
 確認対象:
 - `wrangler.toml`
