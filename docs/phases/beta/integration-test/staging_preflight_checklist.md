@@ -9,11 +9,11 @@
 
 ## 1. Workers staging
 
-- [ ] staging Worker の URL が分かっている
-- [ ] staging Worker へ到達できる
-- [ ] `APP_ENV=staging` になっている
-- [ ] `ALLOWED_ORIGINS` が staging テストで使う origin と整合している
-- [ ] `JWT_ISSUER` / `JWT_AUDIENCE` / `ACCESS_TOKEN_TTL_SECONDS` が設定されている
+- [x] staging Worker の URL が分かっている
+- [x] staging Worker へ到達できる
+- [x] `APP_ENV=staging` になっている
+- [x] `ALLOWED_ORIGINS` が staging テストで使う origin と整合している
+- [x] `JWT_ISSUER` / `JWT_AUDIENCE` / `ACCESS_TOKEN_TTL_SECONDS` が設定されている
 
 確認対象:
 - `apps/api/wrangler.toml`
@@ -41,12 +41,12 @@
 
 ## 3. Web の staging 接続設定
 
-- [ ] staging テストで使う Web の入口が決まっている
-- [ ] `SHADOWNAV_API_BASE` を staging API に向ける方法が決まっている
-- [ ] `SHADOWNAV_SUPABASE_URL` が設定できる
-- [ ] `SHADOWNAV_SUPABASE_PUBLISHABLE_KEY` が設定できる
-- [ ] Cookie を送る前提で API 通信できる
-- [ ] 誤って本番 API を叩かない運用になっている
+- [x] staging テストで使う Web の入口が決まっている
+- [x] `SHADOWNAV_API_BASE` を staging API に向ける方法が決まっている
+- [x] `SHADOWNAV_SUPABASE_URL` が設定できる
+- [x] `SHADOWNAV_SUPABASE_PUBLISHABLE_KEY` が設定できる
+- [x] Cookie を送る前提で API 通信できる
+- [x] 誤って本番 API を叩かない運用になっている
 
 確認対象:
 - `apps/web/pages/lib/client.js`
@@ -57,16 +57,16 @@
 
 ## 4. Supabase Auth
 
-- [ ] staging テストで使う Supabase Project が決まっている
-- [ ] テストユーザーをログインに使える
-- [ ] Email/Password ログインが有効
-- [ ] `SUPABASE_URL` が正しい
-- [ ] `SUPABASE_JWKS_URL` が正しい
-- [ ] `SUPABASE_ISSUER` が正しい
-- [ ] `SUPABASE_AUDIENCE` が正しい
-- [ ] Web 用の `SHADOWNAV_SUPABASE_URL` が正しい
-- [ ] Web 用の `SHADOWNAV_SUPABASE_PUBLISHABLE_KEY` が正しい
-- [ ] auth exchange 後に API Cookie を張れる
+- [x] staging テストで使う Supabase Project が決まっている
+- [x] テストユーザーをログインに使える
+- [x] Email/Password ログインが有効
+- [x] `SUPABASE_URL` が正しい
+- [x] `SUPABASE_JWKS_URL` が正しい
+- [x] `SUPABASE_ISSUER` が正しい
+- [x] `SUPABASE_AUDIENCE` が正しい
+- [x] Web 用の `SHADOWNAV_SUPABASE_URL` が正しい
+- [x] Web 用の `SHADOWNAV_SUPABASE_PUBLISHABLE_KEY` が正しい
+- [x] auth exchange 後に API Cookie を張れる
 
 確認対象:
 - Supabase Dashboard
@@ -151,7 +151,7 @@
 
 ## 10. テストユーザー
 
-- [ ] 未課金ユーザーを使える
+- [x] 未課金ユーザーを使える
 - [ ] 課金済みユーザーを使える
 - [ ] 必要なら再決済用のクリーンなユーザーを用意している
 - [ ] テスト用ユーザーのメールアドレスと用途が整理されている
