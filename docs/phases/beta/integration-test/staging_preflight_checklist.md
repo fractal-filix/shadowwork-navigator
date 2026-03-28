@@ -95,12 +95,12 @@
 
 ## 6. Qdrant
 
-- [ ] `QDRANT_URL` が正しい
-- [ ] `QDRANT_API_KEY` が正しい
-- [ ] `QDRANT_COLLECTION` が正しい
-- [ ] staging から HTTPS で疎通できる
-- [ ] 対象コレクションが存在する
-- [ ] `pnpm run verify:qdrant` 相当の確認結果が取れる
+- [x] `QDRANT_URL` が正しい
+- [x] `QDRANT_API_KEY` が正しい
+- [x] `QDRANT_COLLECTION` が正しい
+- [x] staging から HTTPS で疎通できる
+- [x] 対象コレクションが存在する
+- [x] `pnpm run verify:qdrant` 相当の確認結果が取れる
 
 確認対象:
 - Qdrant Cloud Console
