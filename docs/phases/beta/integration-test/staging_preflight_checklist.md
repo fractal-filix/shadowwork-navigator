@@ -84,7 +84,7 @@
 - [x] `STRIPE_CHECKOUT_MODE` が意図どおりである
 - [x] webhook endpoint URL が staging API を向いている
 - [x] `checkout.session.completed` を listen している
-- [ ] テスト決済に使うカード手段が確認できている
+- [x] テスト決済に使うカード手段が確認できている
 
 確認対象:
 - Stripe Dashboard
@@ -96,6 +96,8 @@
 - 現行実装では Checkout 戻り先の query 引数は使っていないため、`CHECKOUT_SUCCESS_URL` / `CHECKOUT_CANCEL_URL` は単純に購入ページへ戻す値を想定する
 - production の想定値は `https://shadowwork-navigator.com/purchase.html`、staging の想定値は `https://web-staging.shadowwork-navigator.com/purchase.html` とする
 - 確認済みの webhook endpoint URL は staging が `https://api-staging.shadowwork-navigator.com/api/stripe/webhook`、production が `https://api.shadowwork-navigator.com/api/stripe/webhook` である
+- 成功系カード手段として `4242 4242 4242 4242` で Checkout 完了と dashboard 遷移を確認済み
+- `STRIPE_PRICE_ID` には Product ID（`prod_...`）ではなく Price ID（`price_...`）を設定する
 
 ## 6. Qdrant
 
@@ -156,7 +158,7 @@
 ## 10. テストユーザー
 
 - [x] 未課金ユーザーを使える
-- [ ] 課金済みユーザーを使える
+- [x] 課金済みユーザーを使える
 - [ ] 必要なら再決済用のクリーンなユーザーを用意している
 - [ ] テスト用ユーザーのメールアドレスと用途が整理されている
 
