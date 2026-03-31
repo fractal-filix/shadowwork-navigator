@@ -115,11 +115,11 @@
 
 ## 7. AWS KMS / STS
 
-- [ ] `AWS_REGION` が正しい
-- [ ] `AWS_ACCESS_KEY_ID` が正しい
-- [ ] `AWS_SECRET_ACCESS_KEY` が正しい
-- [ ] `KMS_KEY_ID` が正しい
-- [ ] `ASSUME_ROLE_ARN` が正しい
+- [x] `AWS_REGION` が正しい
+- [x] `AWS_ACCESS_KEY_ID` が正しい
+- [x] `AWS_SECRET_ACCESS_KEY` が正しい
+- [x] `KMS_KEY_ID` が正しい
+- [x] `ASSUME_ROLE_ARN` が正しい
 - [ ] staging から KMS 公開鍵取得ができる
 - [ ] staging から unseal のための AssumeRole ができる
 - [ ] decrypt 実行時の監査を CloudTrail で追える
