@@ -137,7 +137,7 @@
 
 ## 8. OpenAI
 
-- [ ] `OPENAI_API_KEY` が正しい
+- [x] `OPENAI_API_KEY` が登録されている
 - [ ] 必要なら `OPENAI_API_BASE_URL` が正しい
 - [ ] thread chat 用の応答生成ができる
 - [ ] embeddings 生成ができる
