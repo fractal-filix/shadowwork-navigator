@@ -120,7 +120,7 @@
 - [x] `AWS_SECRET_ACCESS_KEY` が正しい
 - [x] `KMS_KEY_ID` が正しい
 - [x] `ASSUME_ROLE_ARN` が正しい
-- [ ] staging から KMS 公開鍵取得ができる
+- [x] staging から KMS 公開鍵取得ができる
 - [ ] staging から unseal のための AssumeRole ができる
 - [ ] decrypt 実行時の監査を CloudTrail で追える
 
