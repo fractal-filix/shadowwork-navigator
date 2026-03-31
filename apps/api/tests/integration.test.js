@@ -14,7 +14,7 @@ const SUPABASE_KID = 'supabase-test-kid';
 const { privateKey: supabasePrivateKey, publicKey: supabasePublicKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 2048,
 });
-const MOCK_KMS_KEY_ID = 'arn:aws:kms:ap-southeast-2:555569220922:key/test-kms-key';
+const MOCK_KMS_KEY_ID = 'arn:aws:kms:ap-northeast-1:555569220922:key/test-kms-key';
 const mockKmsPublicKeyDerBase64 = Buffer.from(
   supabasePublicKey.export({ type: 'spki', format: 'der' })
 ).toString('base64');
@@ -155,7 +155,7 @@ function buildEnvBindings() {
     QDRANT_COLLECTION: 'shadowwork_chunks',
     ALLOWED_ORIGINS: 'http://localhost:3000',
     ADMIN_MEMBER_IDS: 'member-admin',
-    AWS_REGION: 'ap-southeast-2',
+    AWS_REGION: 'ap-northeast-1',
     AWS_ACCESS_KEY_ID: 'test-aws-access-key',
     AWS_SECRET_ACCESS_KEY: 'test-aws-secret-key',
     KMS_KEY_ID: MOCK_KMS_KEY_ID,
@@ -2340,10 +2340,10 @@ test('GET /api/crypto/kms_public_key returns kid and PEM public key', async () =
   const kmsRequest = mockAwsRequests.find((entry) => entry.target === 'TrentService.GetPublicKey');
   assert.ok(kmsRequest);
   assert.match(kmsRequest.headers.authorization, /^AWS4-HMAC-SHA256 /);
-  assert.match(kmsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-southeast-2\/kms\/aws4_request/);
+  assert.match(kmsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-northeast-1\/kms\/aws4_request/);
   assert.equal(kmsRequest.headers['x-amz-security-token'], undefined);
   assert.match(String(kmsRequest.headers['x-amz-date']), /^\d{8}T\d{6}Z$/);
-  assert.equal(kmsRequest.headers['x-amz-content-sha256'], 'bf0bc0d63f1aff5d0c4ca250b32b55624a4ae3d6f5f947d8308ac6bde3d8f4f0');
+  assert.equal(kmsRequest.headers['x-amz-content-sha256'], 'a95fb17342e7984ad33a9be0c5fdf0540654ec1e705a8e43132bd584dc22b3b3');
 });
 
 test('GET /api/crypto/kms_public_key returns standardized internal error when KMS_KEY_ID is missing', async () => {
@@ -2366,6 +2366,32 @@ test('GET /api/crypto/kms_public_key returns standardized internal error when KM
     assert.equal(body.ok, false);
     assert.equal(body.error?.code, 'INTERNAL_ERROR');
     assert.equal(body.error?.message, 'KMS public key not available: missing KMS_KEY_ID');
+  } finally {
+    await localMf.dispose();
+  }
+});
+
+test('GET /api/crypto/kms_public_key defaults AWS region to ap-northeast-1 when AWS_REGION is missing', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-kms-public-key-default-region' },
+    bindings: {
+      ...buildEnvBindings(),
+      AWS_REGION: '',
+    },
+  });
+
+  try {
+    mockAwsRequests = [];
+
+    const res = await localMf.dispatchFetch('http://localhost/api/crypto/kms_public_key');
+
+    assert.equal(res.status, 200);
+    const kmsRequest = mockAwsRequests.find((entry) => entry.target === 'TrentService.GetPublicKey');
+    assert.ok(kmsRequest);
+    assert.match(kmsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-northeast-1\/kms\/aws4_request/);
   } finally {
     await localMf.dispose();
   }
@@ -3312,7 +3338,7 @@ test('POST /api/crypto/dek/unseal returns dek_base64 when paid and request valid
   const stsRequest = mockAwsRequests.find((entry) => entry.path === '/sts');
   assert.ok(stsRequest);
   assert.match(stsRequest.headers.authorization, /^AWS4-HMAC-SHA256 /);
-  assert.match(stsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-southeast-2\/sts\/aws4_request/);
+  assert.match(stsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-northeast-1\/sts\/aws4_request/);
   assert.match(String(stsRequest.headers['x-amz-date']), /^\d{8}T\d{6}Z$/);
   assert.equal(stsRequest.headers['x-amz-content-sha256'], 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
   assert.equal(stsRequest.query.Action, 'AssumeRole');
@@ -3321,10 +3347,10 @@ test('POST /api/crypto/dek/unseal returns dek_base64 when paid and request valid
   const kmsRequest = mockAwsRequests.find((entry) => entry.target === 'TrentService.Decrypt');
   assert.ok(kmsRequest);
   assert.match(kmsRequest.headers.authorization, /^AWS4-HMAC-SHA256 /);
-  assert.match(kmsRequest.headers.authorization, /Credential=ASIA_TEST_ACCESS_KEY\/\d{8}\/ap-southeast-2\/kms\/aws4_request/);
+  assert.match(kmsRequest.headers.authorization, /Credential=ASIA_TEST_ACCESS_KEY\/\d{8}\/ap-northeast-1\/kms\/aws4_request/);
   assert.equal(kmsRequest.headers['x-amz-security-token'], 'TEST_SESSION_TOKEN');
   assert.match(String(kmsRequest.headers['x-amz-date']), /^\d{8}T\d{6}Z$/);
-  assert.equal(kmsRequest.headers['x-amz-content-sha256'], 'cfa4c668421f2a3e5a8d4249727b6fe0aa1369a0ad5577ff2a3857108b069cf9');
+  assert.equal(kmsRequest.headers['x-amz-content-sha256'], 'b6c1c715a1728e7dde2c4e69e92270274cc102a1767d9e778c8712c35da479d9');
 });
 
 test('POST /api/crypto/dek/unseal returns 403 when user is not paid', async () => {
@@ -3348,6 +3374,55 @@ test('POST /api/crypto/dek/unseal returns 403 when user is not paid', async () =
   const body = await res.json();
   assert.equal(body.ok, false);
   assert.equal(body.error?.code, 'FORBIDDEN');
+});
+
+test('POST /api/crypto/dek/unseal defaults AWS region to ap-northeast-1 when AWS_REGION is missing', async () => {
+  const workerPath = path.resolve('dist', 'worker.js');
+  const localMf = new Miniflare({
+    scriptPath: workerPath,
+    modules: true,
+    d1Databases: { DB: 'test-db-dek-unseal-default-region' },
+    bindings: {
+      ...buildEnvBindings(),
+      AWS_REGION: '',
+    },
+  });
+
+  try {
+    const localDb = await localMf.getD1Database('DB');
+    await applyDdl(localDb);
+    await localDb.prepare('INSERT INTO user_flags (user_id, paid) VALUES (?, 1)').bind(MEMBER_ID).run();
+
+    mockAwsRequests = [];
+
+    const res = await localMf.dispatchFetch('http://localhost/api/crypto/dek/unseal', {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders(MEMBER_ID),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        wrapped_key: Buffer.from('wrapped').toString('base64'),
+        wrapped_key_kid: MOCK_KMS_KEY_ID,
+        wrapped_key_alg: 'RSAES_OAEP_SHA_256',
+        thread_id: 'thread-default-region',
+        message_id: 'message-default-region',
+        reason: 'default-region',
+      }),
+    });
+
+    assert.equal(res.status, 200);
+
+    const stsRequest = mockAwsRequests.find((entry) => entry.path === '/sts');
+    assert.ok(stsRequest);
+    assert.match(stsRequest.headers.authorization, /Credential=test-aws-access-key\/\d{8}\/ap-northeast-1\/sts\/aws4_request/);
+
+    const kmsRequest = mockAwsRequests.find((entry) => entry.target === 'TrentService.Decrypt');
+    assert.ok(kmsRequest);
+    assert.match(kmsRequest.headers.authorization, /Credential=ASIA_TEST_ACCESS_KEY\/\d{8}\/ap-northeast-1\/kms\/aws4_request/);
+  } finally {
+    await localMf.dispose();
+  }
 });
 
 test('POST /api/crypto/dek/unseal does not log plaintext dek when KMS decrypt fails', async () => {

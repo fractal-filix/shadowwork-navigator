@@ -8,7 +8,7 @@
         "kms:Decrypt",
         "kms:DescribeKey"
       ],
-      "Resource": "arn:aws:kms:ap-southeast-2:555569220922:key/ea3e43d1-bc62-47d5-af00-fc609843a46f"
+      "Resource": "arn:aws:kms:ap-northeast-1:555569220922:key/ea3e43d1-bc62-47d5-af00-fc609843a46f"
     }
   ]
 }

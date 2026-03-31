@@ -21,7 +21,7 @@ export async function kmsPublicKeyHandler({ request, env }: KmsPublicKeyHandlerC
     return internalError('KMS public key not available: missing AWS credentials in environment');
   }
 
-  const region = env.AWS_REGION?.trim() || 'ap-southeast-2';
+  const region = env.AWS_REGION?.trim() || 'ap-northeast-1';
 
   try {
     const result = await kmsGetPublicKey(

@@ -126,7 +126,7 @@ export async function dekUnsealHandler({ request, env }: { request: Request; env
     return internalError('Decrypt not available: missing AWS credentials in environment');
   }
 
-  const region = env.AWS_REGION?.trim() || 'ap-southeast-2';
+  const region = env.AWS_REGION?.trim() || 'ap-northeast-1';
   const roleArn = env.ASSUME_ROLE_ARN?.trim();
   if (!roleArn) {
     return internalError('Decrypt not available: missing ASSUME_ROLE_ARN');

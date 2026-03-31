@@ -375,7 +375,7 @@ HTTPステータスはエラー種別に応じて設定する（例: 400/401/403
 ```json
 {
   "ok": true,
-  "kid": "arn:aws:kms:ap-southeast-2:555569220922:key/ea3e43d1-bc62-47d5-af00-fc609843a46f",
+  "kid": "arn:aws:kms:ap-northeast-1:555569220922:key/ea3e43d1-bc62-47d5-af00-fc609843a46f",
   "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkq...\n-----END PUBLIC KEY-----\n"
 }
 ```
