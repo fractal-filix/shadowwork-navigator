@@ -14,6 +14,7 @@
 - 実施者
 - 環境
 - 使用ユーザー
+- 使用ユーザーのメールアドレスと用途
 - 結果
 - 補足
 
@@ -23,6 +24,7 @@
 - Web の接続先は staging API を指している
 - Supabase, Stripe, Qdrant, AWS KMS, OpenAI は staging 相当の実接続設定である
 - β検証用に少なくとも未課金ユーザー 1 名、課金済みユーザー 1 名を用意する
+- 追加の検証用ユーザーが必要になった場合は、各ケース実施時にその場で作成し、メールアドレスと用途を記録する
 - 必要に応じて D1, Stripe Dashboard, Cloudflare Dashboard, Qdrant Console, CloudTrail を確認できる
 
 推奨ユーザー:
