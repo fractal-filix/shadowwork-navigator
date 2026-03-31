@@ -137,11 +137,14 @@
 
 ## 8. OpenAI
 
+事前確認:
 - [x] `OPENAI_API_KEY` が登録されている
 - [x] 必要なら `OPENAI_API_BASE_URL` が正しい
-- [ ] thread chat 用の応答生成ができる
-- [ ] embeddings 生成ができる
-- [ ] レート制限や課金停止などで即時失敗しない
+
+結合テストで確認する項目:
+- thread chat 用の応答生成ができる
+- embeddings 生成ができる
+- レート制限や課金停止などで即時失敗しない
 
 確認対象:
 - OpenAI 側の利用状況
@@ -150,6 +153,11 @@
 注意:
 - `OPENAI_API_BASE_URL` は任意で、未設定なら実装は `https://api.openai.com` を使う
 - OpenAI 互換 gateway やプロキシを使う場合のみ、staging vars の設定値がその接続先と一致していることを確認する
+
+確認手順メモ:
+1. まず A-07 thread chat を staging の課金済みユーザーで実施し、`/api/thread/chat` が 200 で `reply` を返すことを確認する
+2. `thread_chat` 実装は OpenAI 応答生成の前に embeddings 生成を通るため、A-07 成功時は `thread chat 用の応答生成` と `embeddings 生成` を両方確認済みとして扱える
+3. OpenAI 側の即時失敗切り分けは `POST /api/llm/ping` を使い、200 応答なら少なくともその時点でレート制限や課金停止による即時失敗は起きていないと判断する
 
 ## 9. 管理画面アクセス
 
