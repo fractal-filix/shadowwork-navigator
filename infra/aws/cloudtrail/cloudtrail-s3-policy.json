@@ -6,15 +6,25 @@
       "Effect": "Allow",
       "Principal": {"Service": "cloudtrail.amazonaws.com"},
       "Action": "s3:GetBucketAcl",
-      "Resource": "arn:aws:s3:::shadowwork-navigator-trail-<AWS_ACCOUNT_ID>-ap-southeast-2"
+      "Resource": "arn:aws:s3:::shadowwork-navigator-trail-<AWS_ACCOUNT_ID>-ap-northeast-1",
+      "Condition": {
+        "StringEquals": {
+          "aws:SourceArn": "arn:aws:cloudtrail:ap-northeast-1:<AWS_ACCOUNT_ID>:trail/shadowwork-navigator-trail"
+        }
+      }
     },
     {
       "Sid": "AWSCloudTrailWrite20150319",
       "Effect": "Allow",
       "Principal": {"Service": "cloudtrail.amazonaws.com"},
       "Action": "s3:PutObject",
-      "Resource": "arn:aws:s3:::shadowwork-navigator-trail-<AWS_ACCOUNT_ID>-ap-southeast-2/AWSLogs/<AWS_ACCOUNT_ID>/*",
-      "Condition": {"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}
+      "Resource": "arn:aws:s3:::shadowwork-navigator-trail-<AWS_ACCOUNT_ID>-ap-northeast-1/AWSLogs/<AWS_ACCOUNT_ID>/*",
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-acl": "bucket-owner-full-control",
+          "aws:SourceArn": "arn:aws:cloudtrail:ap-northeast-1:<AWS_ACCOUNT_ID>:trail/shadowwork-navigator-trail"
+        }
+      }
     }
   ]
 }

@@ -161,11 +161,11 @@
 
 ## 9. 管理画面アクセス
 
-- [ ] Cloudflare Dashboard に入れる
-- [ ] Supabase Dashboard に入れる
-- [ ] Stripe Dashboard に入れる
-- [ ] Qdrant Console に入れる
-- [ ] AWS Console / CloudTrail に入れる
+- [x] Cloudflare Dashboard に入れる
+- [x] Supabase Dashboard に入れる
+- [x] Stripe Dashboard に入れる
+- [x] Qdrant Console に入れる
+- [x] AWS Console / CloudTrail に入れる
 
 目的:
 - fail 時に「環境のせいか」をすぐ切り分けられるようにする
