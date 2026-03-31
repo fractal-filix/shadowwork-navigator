@@ -138,7 +138,7 @@
 ## 8. OpenAI
 
 - [x] `OPENAI_API_KEY` が登録されている
-- [ ] 必要なら `OPENAI_API_BASE_URL` が正しい
+- [x] 必要なら `OPENAI_API_BASE_URL` が正しい
 - [ ] thread chat 用の応答生成ができる
 - [ ] embeddings 生成ができる
 - [ ] レート制限や課金停止などで即時失敗しない
@@ -146,6 +146,10 @@
 確認対象:
 - OpenAI 側の利用状況
 - Workers staging secrets / vars
+
+注意:
+- `OPENAI_API_BASE_URL` は任意で、未設定なら実装は `https://api.openai.com` を使う
+- OpenAI 互換 gateway やプロキシを使う場合のみ、staging vars の設定値がその接続先と一致していることを確認する
 
 ## 9. 管理画面アクセス
 
