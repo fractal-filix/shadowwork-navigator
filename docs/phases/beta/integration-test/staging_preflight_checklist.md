@@ -179,4 +179,9 @@
 
 - [x] 1 から 10 の未確認項目がない
 - [x] [test_plan.md](test_plan.md) の実施前チェックに進める
-- [ ] 本番環境を誤って使わないことを確認した
+- [x] 本番環境を誤って使わないことを確認した
+
+確認メモ:
+- 結合テストの Web 入口は `https://web-staging.shadowwork-navigator.com` に固定し、`https://shadowwork-navigator.com` は使わない
+- API 接続先は staging の `https://api-staging.shadowwork-navigator.com` を使い、production の `https://api.shadowwork-navigator.com` は使わない
+- preview URL（`*.pages.dev`）は結合テスト入口として使わない
