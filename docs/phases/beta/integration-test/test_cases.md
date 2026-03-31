@@ -224,6 +224,7 @@
 2. /api/thread/messages の応答を確認する
 3. /api/crypto/dek/unseal が必要回数だけ呼ばれることを確認する
 4. 復号済み平文が画面に表示されることを確認する
+5. 必要に応じて CloudTrail Event history で `sts.amazonaws.com / AssumeRole` と `kms.amazonaws.com / Decrypt` を同時刻で確認する
 
 期待結果:
 - messages 取得が成功する
@@ -232,6 +233,7 @@
 証跡:
 - app.html のログ表示
 - Network の /api/thread/messages, /api/crypto/dek/unseal
+- 必要に応じて CloudTrail の AssumeRole / Decrypt イベント
 
 ### A-10 rag chunks upsert/search
 

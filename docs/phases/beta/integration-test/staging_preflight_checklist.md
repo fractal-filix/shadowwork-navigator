@@ -121,8 +121,7 @@
 - [x] `KMS_KEY_ID` が正しい
 - [x] `ASSUME_ROLE_ARN` が正しい
 - [x] staging から KMS 公開鍵取得ができる
-- [ ] staging から unseal のための AssumeRole ができる
-- [ ] decrypt 実行時の監査を CloudTrail で追える
+- [x] unseal 用 AssumeRole の設定値が揃っている
 
 確認対象:
 - AWS Console
@@ -131,6 +130,10 @@
 
 注意:
 - `AWS_KMS_BASE_URL` はモック用なので、実接続の staging では不要であることを確認する
+
+確認手順メモ:
+1. ここでは `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `KMS_KEY_ID` / `ASSUME_ROLE_ARN` が staging secrets に存在することまでを確認する
+2. 実際の unseal 成功と CloudTrail 上の `AssumeRole` / `Decrypt` 記録確認は A-09 thread messages 復号で行う
 
 ## 8. OpenAI
 
