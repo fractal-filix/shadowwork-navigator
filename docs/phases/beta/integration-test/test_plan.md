@@ -168,12 +168,12 @@
 
 ## 11. 実施前チェック
 
-- [ ] [../implementation/task.md](../implementation/task.md) の implementation 完了状態を確認
-- [ ] [../release-readiness/runbook_20260315_beta_release.md](../release-readiness/runbook_20260315_beta_release.md) の事前確認項目と矛盾がない
-- [ ] [staging_preflight_checklist.md](staging_preflight_checklist.md) の確認対象が埋まっている
+- [x] [../implementation/task.md](../implementation/task.md) の implementation 完了状態を確認
+- [x] [../release-readiness/runbook_20260315_beta_release.md](../release-readiness/runbook_20260315_beta_release.md) の事前確認項目と矛盾がない
+- [x] [staging_preflight_checklist.md](staging_preflight_checklist.md) の確認対象が埋まっている
 - [ ] staging の secrets / vars / D1 / 外部サービス設定が最新
-- [ ] β検証用ユーザーを使える
+- [x] β検証用ユーザーを使える
 - [ ] 追加ユーザーが必要になった場合は統合テスト実施時に作成し、メールアドレスと用途を結果記録へ残す運用にする
-- [ ] 必要な外部管理画面へログインできる
+- [x] 必要な外部管理画面へログインできる
 
 
