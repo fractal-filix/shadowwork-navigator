@@ -19,6 +19,9 @@
 ## 0. リリース前提
 
 - [ ] リリース対象コミットが `main` に入っている
+- [ ] `main` の対象コミットが `staging` に反映済みである
+- [ ] staging で対象コミットの検証が完了している
+- [ ] 本番へ出す対象コミットが `production` へ反映される予定である
 - [ ] 作業端末で Cloudflare / Stripe / Supabase / AWS へ必要な権限でログイン済み
 - [ ] 機密情報を含む `.env*`, `.dev.vars`, 鍵ファイルを開いていない
 - [ ] リリース作業ログの記録先を決めている（日時、実行者、結果、ロールバック判断）
@@ -26,6 +29,14 @@
 補足:
 - Web は `shadowwork-navigator.com`、API は `api.shadowwork-navigator.com` を前提にする
 - preview URL は本番 Cookie 運用の確認には使わない
+- Cloudflare Pages の production branch は `production` を前提にする
+
+ブランチ反映フロー:
+1. 作業ブランチを `main` へ反映する
+2. `main` を `staging` へ反映する
+3. staging 環境で結合テストと確認を行う
+4. 問題がなければ `staging` を `production` へ反映する
+5. production のコミットを本番環境へ反映する
 
 ---
 
@@ -129,6 +140,7 @@ pnpm exec wrangler d1 execute filix_shadowwork_prod --env production --remote --
 - Web クライアント設定の参照先は `apps/web/pages/lib/client.js`
 
 Cloudflare Pages 側で確認:
+- [ ] Production branch が `production` である
 - [ ] Production ドメインが `https://shadowwork-navigator.com`
 - [ ] Pages URL が `https://shadowwork-navigator.pages.dev`
 - [ ] Root directory が `apps/web`
@@ -226,6 +238,13 @@ curl --ssl-no-revoke https://api.shadowwork-navigator.com/api/crypto/kms_public_
 
 ## 7. 本番反映手順
 
+### 7.0 ブランチ反映確認
+
+- [ ] `main` の対象コミットが `staging` に入っている
+- [ ] staging 検証結果が記録済みである
+- [ ] `staging` の対象コミットを `production` へ反映済みである
+- [ ] `production` に未検証コミットが混ざっていない
+
 ### 7.1 API（Workers）
 
 ```powershell
@@ -238,14 +257,19 @@ pnpm exec wrangler deploy --env production
 - [ ] staging deploy 成功
 - [ ] production deploy 成功
 
+補足:
+- `--env=staging` は `staging` ブランチで確認した対象コミットを反映する
+- `--env=production` は `production` ブランチへ反映済みの同一コミットを反映する
+
 ### 7.2 Web（Pages）
 
-- [ ] 本番対象コミットが `main` に反映済み
+- [ ] 本番対象コミットが `production` に反映済み
 - [ ] Cloudflare Pages の production deploy が対象コミットまで進んでいる
 - [ ] `https://shadowwork-navigator.com` が最新コミットを配信している
 
 補足:
 - このリポジトリには Web の専用 deploy コマンドを置いていないため、Pages の Git 連携または Dashboard 上の production deploy 状態を正とする
+- `main` は統合用ブランチであり、Pages の production deploy の起点にはしない
 
 ---
 
@@ -289,6 +313,7 @@ pnpm exec wrangler deploy --env production
 - [ ] 実施日時
 - [ ] 実施者
 - [ ] 反映した commit SHA
+- [ ] `main` / `staging` / `production` の反映確認
 - [ ] staging / production の結果
 - [ ] 既知の残課題
 - [ ] ロールバック要否
@@ -298,6 +323,7 @@ pnpm exec wrangler deploy --env production
 ```text
 2026-03-15 21:30 JST / <name>
 - commit: <sha>
+- branch flow: main -> staging -> production
 - workers: staging/prod ok
 - pages: prod ok
 - stripe webhook: ok

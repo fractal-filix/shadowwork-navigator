@@ -24,4 +24,7 @@
 - 詳細手順は [test_cases.md](test_cases.md) に記載
 - 実施結果は [test_results.md](test_results.md) に記録
 
-
+ブランチ運用:
+- 結合テスト対象の変更は `main` から作業ブランチを切って `main` へ PR で反映する
+- staging 結合テストは `main` を取り込んだ `staging` ブランチのコミットを対象に行う
+- staging で pass したコミットだけを `production` へ反映する
