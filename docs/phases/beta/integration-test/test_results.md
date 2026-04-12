@@ -17,7 +17,7 @@
 | ID | ケース | 実施日 | 実施者 | 環境 | 使用ユーザー | 使用ユーザー詳細 | 結果 | 証跡 | 補足 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A-01 | Supabase ログイン + auth exchange | 2026/04/11 | Filix | staging | test1@example.com |  | pass |  |  |
-| A-02 | paid 判定 |  |  | staging |  |  | not-run |  |  |
+| A-02 | paid 判定 | 2026/04/12 | Filix | staging | user-free@example.com user-paid@example.com |  | pass |  |  |
 | A-03 | checkout session 作成 |  |  | staging |  |  | not-run |  |  |
 | A-04 | Stripe webhook 反映 |  |  | staging |  |  | not-run |  |  |
 | A-05 | run start |  |  | staging |  |  | not-run |  |  |
