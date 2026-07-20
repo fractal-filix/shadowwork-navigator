@@ -110,7 +110,7 @@
   </div>
 
   <script type="module">
-    import { API_BASE, getSupabaseUser } from "/lib/client.js";
+    import { API_BASE, ensureApiSessionCookie, getSupabaseUser } from "/lib/client.js";
     import { createPurchasePageController } from "/lib/purchase_page.js";
     const DEBUG_UI = false;
 
@@ -171,6 +171,7 @@
       },
       deps: {
         getSupabaseUser: getMemberAnyVersion,
+        ensureApiSessionCookie,
         apiPaid,
         apiCreateCheckoutSession,
       },

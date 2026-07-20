@@ -29,6 +29,11 @@ export function createPurchasePageController({ elements, deps, navigate }) {
     toDashboardBtn.disabled = !isPaid;
   }
 
+  async function syncApiSessionCookie() {
+    if (typeof deps.ensureApiSessionCookie !== "function") return;
+    await deps.ensureApiSessionCookie();
+  }
+
   async function boot() {
     setStatus("status: checking login...", "muted");
     goCheckoutBtn.disabled = true;
@@ -57,6 +62,7 @@ export function createPurchasePageController({ elements, deps, navigate }) {
     setPaidUiState(false);
 
     setStatus("status: checking paid...", "muted");
+    await syncApiSessionCookie();
     const paidResult = await deps.apiPaid();
     if (!paidResult.ok) {
       setStatus(`status: paid check failed: ${JSON.stringify(paidResult.data)}`, "ng");
@@ -77,6 +83,7 @@ export function createPurchasePageController({ elements, deps, navigate }) {
     if (goCheckoutBtn.disabled) return;
 
     setStatus("status: checkout session を作成中...", "muted");
+    await syncApiSessionCookie();
     const checkoutResult = await deps.apiCreateCheckoutSession();
     if (!checkoutResult.ok || !checkoutResult.data?.url) {
       setStatus(`status: checkout session failed: ${JSON.stringify(checkoutResult.data)}`, "ng");
@@ -89,6 +96,7 @@ export function createPurchasePageController({ elements, deps, navigate }) {
   async function handleCheckPaid() {
     checkPaidBtn.disabled = true;
     try {
+      await syncApiSessionCookie();
       const paidResult = await deps.apiPaid();
       if (!paidResult.ok) {
         setStatus(`status: paid check failed: ${JSON.stringify(paidResult.data)}`, "ng");

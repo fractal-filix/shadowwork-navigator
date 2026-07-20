@@ -100,3 +100,88 @@ test("支払い確認で未払いのままなら Dashboard は無効のまま", 
   assert.equal(elements.toDashboardBtn.disabled, true);
   assert.equal(elements.status.textContent, "status: 未払いです。決済を完了してください。");
 });
+
+test("ログイン済みの起動時は paid 判定前に API セッションを再同期する", async () => {
+  const elements = createElements();
+  const callOrder = [];
+
+  const controller = createPurchasePageController({
+    elements,
+    deps: {
+      getSupabaseUser: async () => ({ id: "user-123", email: "u@example.com" }),
+      ensureApiSessionCookie: async () => {
+        callOrder.push("ensure");
+      },
+      apiPaid: async () => {
+        callOrder.push("paid");
+        return { ok: true, data: { paid: false } };
+      },
+      apiCreateCheckoutSession: async () => ({ ok: true, data: { url: "https://example.com" } }),
+    },
+    navigate: () => {},
+  });
+
+  await controller.boot();
+
+  assert.deepEqual(callOrder, ["ensure", "paid"]);
+});
+
+test("決済ページ遷移前に API セッションを再同期する", async () => {
+  const elements = createElements();
+  const callOrder = [];
+  let movedTo = "";
+
+  const controller = createPurchasePageController({
+    elements,
+    deps: {
+      getSupabaseUser: async () => ({ id: "user-123", email: "u@example.com" }),
+      ensureApiSessionCookie: async () => {
+        callOrder.push("ensure");
+      },
+      apiPaid: async () => ({ ok: true, data: { paid: false } }),
+      apiCreateCheckoutSession: async () => {
+        callOrder.push("checkout");
+        return { ok: true, data: { url: "https://example.com/checkout" } };
+      },
+    },
+    navigate: (url) => {
+      movedTo = url;
+    },
+  });
+
+  await controller.boot();
+  callOrder.length = 0;
+
+  await controller.handleGoCheckout();
+
+  assert.deepEqual(callOrder, ["ensure", "checkout"]);
+  assert.equal(movedTo, "https://example.com/checkout");
+});
+
+test("支払い確認の都度 API セッションを再同期する", async () => {
+  const elements = createElements();
+  const callOrder = [];
+
+  const controller = createPurchasePageController({
+    elements,
+    deps: {
+      getSupabaseUser: async () => ({ id: "user-123", email: "u@example.com" }),
+      ensureApiSessionCookie: async () => {
+        callOrder.push("ensure");
+      },
+      apiPaid: async () => {
+        callOrder.push("paid");
+        return { ok: true, data: { paid: false } };
+      },
+      apiCreateCheckoutSession: async () => ({ ok: true, data: { url: "https://example.com" } }),
+    },
+    navigate: () => {},
+  });
+
+  await controller.boot();
+  callOrder.length = 0;
+
+  await controller.handleCheckPaid();
+
+  assert.deepEqual(callOrder, ["ensure", "paid"]);
+});
